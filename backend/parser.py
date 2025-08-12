@@ -215,7 +215,9 @@ def parse_osu_file(file_path):
                     if data.get("background_file") is None and (line.startswith("0,0,") or line.startswith("Image,")):
                         parts = line.split(',')
                         if len(parts) >= 3:
-                            data["background_file"] = parts[2].strip().strip('"')
+                            filename = parts[2].strip().strip('"')
+                            logging.debug(f"Parser found background event in {os.path.basename(file_path)}: '{filename}'")
+                            data["background_file"] = filename
 
                 elif current_section == "[TimingPoints]":
                     parts = line.split(',')
@@ -223,7 +225,6 @@ def parse_osu_file(file_path):
                         beat_length = float(parts[1].strip())
                         if beat_length > 0:
                             time = int(float(parts[0].strip()))
-                            # Round to 2 decimal places to group very similar BPMs
                             bpm = round(60000.0 / beat_length, 2)
                             uninherited_timing_points.append({'time': time, 'bpm': bpm})
 
@@ -267,8 +268,9 @@ def parse_osu_file(file_path):
                     data['bpm'] = max(bpm_durations, key=bpm_durations.get)
 
     except Exception as e:
-        print(f"Warning: Could not parse {file_path} for detailed BPM: {e}")
-        
+        logging.error(f"Warning: Could not parse {file_path} for detailed BPM: {e}")
+    
+    logging.debug(f"Parser result for {os.path.basename(file_path)}: {data}")
     return data
 
 def calculate_pp(osu_file_path, replay_data):
