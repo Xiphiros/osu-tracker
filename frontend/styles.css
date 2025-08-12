@@ -1,0 +1,88 @@
+:root {
+    --background-color: #1a1a1a;
+    --text-color: #e0e0e0;
+    --header-bg: #2c2c2c;
+    --table-border: #444;
+    --table-header-bg: #3a3a3a;
+    --table-row-hover: #2f2f2f;
+    --accent-color: #00aaff;
+    --accent-hover: #0088cc;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 20px;
+}
+
+header {
+    background-color: var(--header-bg);
+    padding: 15px 25px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+h1 {
+    margin: 0;
+    font-size: 1.5em;
+}
+
+.controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#scan-button {
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.2s;
+}
+
+#scan-button:hover {
+    background-color: var(--accent-hover);
+}
+
+#status-message {
+    font-size: 0.9em;
+    color: #aaa;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: var(--header-bg);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+th, td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid var(--table-border);
+}
+
+thead th {
+    background-color: var(--table-header-bg);
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+tbody tr:hover {
+    background-color: var(--table-row-hover);
+}
+
+tbody tr:last-child td {
+    border-bottom: none;
+}
