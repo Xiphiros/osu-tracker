@@ -1,4 +1,5 @@
 import sqlite3
+import logging
 
 DATABASE_FILE = 'osu_tracker.db'
 
