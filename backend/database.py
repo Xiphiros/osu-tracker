@@ -68,7 +68,7 @@ def add_replay(replay_data):
     
     conn.commit()
     conn.close()
-
+    
 def get_all_replays():
     """Retrieves all replay records from the database."""
     conn = get_db_connection()
@@ -87,11 +87,6 @@ def get_unique_players():
     conn.close()
     return players
 
-if __name__ == '__main__':
-    # This will run only when you execute `python backend/database.py` directly.
-    # It sets up the database file and the table.
-    init_db()
-
 def update_replay_pp(replay_md5, pp, stars, map_max_combo):
     """Updates the pp, stars, and map_max_combo for an existing replay record."""
     conn = get_db_connection()
@@ -102,3 +97,8 @@ def update_replay_pp(replay_md5, pp, stars, map_max_combo):
     )
     conn.commit()
     conn.close()
+
+if __name__ == '__main__':
+    # This will run only when you execute `python backend/database.py` directly.
+    # It sets up the database file and the table.
+    init_db()
