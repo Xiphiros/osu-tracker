@@ -37,7 +37,7 @@ def init_db():
     conn.commit()
     conn.close()
     print("Database initialized successfully.")
-    
+
 def add_replay(replay_data):
     """Adds a new replay record to the database. Ignores duplicates based on replay_md5."""
     conn = get_db_connection()
@@ -48,8 +48,8 @@ def add_replay(replay_data):
         INSERT OR IGNORE INTO replays (
             game_mode, game_version, beatmap_md5, player_name, replay_md5,
             num_300s, num_100s, num_50s, num_gekis, num_katus, num_misses,
-            total_score, max_combo, mods_used, pp, stars, map_max_combo, played_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            total_score, max_combo, mods_used, pp, stars, map_max_combo, bpm, played_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         replay_data.get('game_mode'), replay_data.get('game_version'),
         replay_data.get('beatmap_md5'), replay_data.get('player_name'),
@@ -59,12 +59,13 @@ def add_replay(replay_data):
         replay_data.get('num_misses'), replay_data.get('total_score'),
         replay_data.get('max_combo'), replay_data.get('mods_used'),
         replay_data.get('pp'), replay_data.get('stars'),
-        replay_data.get('map_max_combo'), replay_data.get('played_at')
+        replay_data.get('map_max_combo'), replay_data.get('bpm'),
+        replay_data.get('played_at')
     ))
     
     conn.commit()
     conn.close()
-
+    
 def get_all_replays(player_name=None):
     """Retrieves all replay records from the database, optionally filtering by player name."""
     conn = get_db_connection()
