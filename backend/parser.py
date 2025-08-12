@@ -84,8 +84,10 @@ def parse_replay_file(file_path):
         replay_data['num_misses'] = read_short(f)
         replay_data['total_score'] = read_int(f)
         replay_data['max_combo'] = read_short(f)
-        read_byte(f) # perfect_combo (1 byte)
-        replay_data['played_at'] = read_windows_ticks(f) # Timestamp
+        replay_data['is_perfect_combo'] = read_byte(f) != 0
+        replay_data['mods_used'] = read_int(f)
+        read_string(f)
+        replay_data['played_at'] = read_windows_ticks(f)
         return replay_data
         
 def parse_osu_db(db_path):
