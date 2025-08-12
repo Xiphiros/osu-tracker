@@ -63,6 +63,50 @@ def parse_replay_file(file_path):
         replay_data['num_misses'] = read_short(f)
         replay_data['total_score'] = read_int(f)
         return replay_data
+    
+def parse_osu_file(file_path):
+    """
+    Parses a .osu file to find the audio and background filenames.
+    Note: This is a simplified parser and might not cover all edge cases.
+    """
+    data = {"audio_file": None, "background_file": None}
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            in_events_section = False
+            for line in f:
+                line = line.strip()
+
+                # Find audio file in [General] section
+                if line.startswith("AudioFilename:"):
+                    data["audio_file"] = line.split(":", 1)[1].strip()
+
+                # Find background file in [Events] section
+                if line == "[Events]":
+                    in_events_section = True
+                    continue
+                
+                if in_events_section:
+                    # Background is usually the first event of type 0 or "Image"
+                    # Format: eventType,startTime,eventParams
+                    # e.g., 0,0,"bg.jpg",0,0
+                    if line.startswith("0,0,") or line.startswith("Image,"):
+                        parts = line.split(',')
+                        if len(parts) >= 3:
+                            # The filename is the third part, strip quotes
+                            bg_file = parts[2].strip('"')
+                            data["background_file"] = bg_file
+                            # Assume we found it and stop looking in this section
+                            in_events_section = False
+                
+                # Stop if we found both
+                if data["audio_file"] and data["background_file"]:
+                    break
+    except FileNotFoundError:
+        print(f"Warning: .osu file not found at {file_path}")
+    except Exception as e:
+        print(f"Error parsing .osu file {file_path}: {e}")
+
+    return data
 
 def parse_osu_db(db_path):
     """Parses the osu!.db file and returns a dictionary of beatmaps keyed by MD5 hash."""
