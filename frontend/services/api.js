@@ -1,9 +1,29 @@
 const API_BASE_URL = '/api'; // Use a relative path
 
-export const getReplays = async () => {
-    const response = await fetch(`${API_BASE_URL}/replays`);
+export const getReplays = async (playerName = null) => {
+    let url = `${API_BASE_URL}/replays`;
+    if (playerName) {
+        url += `?player_name=${encodeURIComponent(playerName)}`;
+    }
+    const response = await fetch(url);
     if (!response.ok) {
         throw new Error('Failed to fetch replays. Is the backend server running?');
+    }
+    return response.json();
+};
+
+export const getPlayers = async () => {
+    const response = await fetch(`${API_BASE_URL}/players`);
+    if (!response.ok) {
+        throw new Error('Failed to fetch players.');
+    }
+    return response.json();
+};
+
+export const getPlayerStats = async (playerName) => {
+    const response = await fetch(`${API_BASE_URL}/players/${encodeURIComponent(playerName)}/stats`);
+    if (!response.ok) {
+        throw new Error('Failed to fetch player stats.');
     }
     return response.json();
 };
