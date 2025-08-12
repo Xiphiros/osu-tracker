@@ -131,7 +131,6 @@ def scan_replays_folder():
     if not os.path.isdir(replays_path):
         return jsonify({"error": f"Replays directory not found at: {replays_path}"}), 404
     try:
-        # Refresh the beatmap cache to pick up any new maps since startup.
         logging.info("Refreshing beatmap cache before scan...")
         load_beatmap_cache()
         logging.info("Beatmap cache refreshed.")
@@ -143,17 +142,19 @@ def scan_replays_folder():
                 replay_data = parser.parse_replay_file(file_path)
                 if not replay_data or not replay_data.get('replay_md5'): continue
                 
-                # Initialize fields and get beatmap info from cache
-                replay_data.update({'pp': None, 'stars': None, 'map_max_combo': None, 'bpm': None})
+                # Initialize fields
+                replay_data.update({'pp': None, 'stars': None, 'map_max_combo': None, 'bpm': None, 'bpm_min': None, 'bpm_max': None})
                 beatmap_info = BEATMAP_CACHE.get(replay_data['beatmap_md5'])
                 
                 if beatmap_info:
-                    # Save the BPM from the cache
-                    replay_data['bpm'] = beatmap_info.get('bpm')
                     osu_file_path = os.path.join(songs_path, beatmap_info['folder_name'], beatmap_info['osu_file_name'])
                     if os.path.exists(osu_file_path):
+                        # Enrich with PP and detailed BPM info before storing
                         pp_info = parser.calculate_pp(osu_file_path, replay_data)
                         replay_data.update(pp_info)
+                        
+                        osu_details = parser.parse_osu_file(osu_file_path)
+                        replay_data.update(osu_details)
                         
                 database.add_replay(replay_data)
             except Exception as e:
@@ -162,7 +163,7 @@ def scan_replays_folder():
     except Exception as e:
         logging.error(f"An error occurred during scan: {str(e)}", exc_info=True)
         return jsonify({"error": f"An error occurred during scan: {str(e)}"}), 500
-      
+          
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_index(path):
