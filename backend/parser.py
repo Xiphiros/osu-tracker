@@ -180,38 +180,29 @@ def parse_osu_file(file_path):
 def calculate_pp(osu_file_path, replay_data):
     """Calculates PP and star rating for a given play using rosu-pp-py."""
     try:
-        # Map integer game mode from replay to rosu_pp_py.GameMode enum
-        game_mode_int = replay_data.get('game_mode', 0)
-        mode_map = {
-            0: rosu_pp_py.GameMode.Osu,
-            1: rosu_pp_py.GameMode.Taiko,
-            2: rosu_pp_py.GameMode.Catch,
-            3: rosu_pp_py.GameMode.Mania,
-        }
-        mode = mode_map.get(game_mode_int, rosu_pp_py.GameMode.Osu)
-        
+        # Parse the beatmap file
         beatmap = rosu_pp_py.Beatmap(path=osu_file_path)
-        
-        # Calculator for difficulty attributes (stars)
-        diff_calc = rosu_pp_py.Calculator(mode=mode) 
-        diff_attrs = diff_calc.difficulty(beatmap)
 
-        # Calculator for performance attributes (pp)
-        perf_calc = rosu_pp_py.Calculator(
-            mode=mode,
+        # First, calculate the difficulty attributes (stars)
+        diff_attrs = rosu_pp_py.Difficulty().calculate(beatmap)
+
+        # Then, create a performance calculator with the score's details
+        perf_calc = rosu_pp_py.Performance(
             n300=replay_data.get('num_300s'),
             n100=replay_data.get('num_100s'),
             n50=replay_data.get('num_50s'),
             n_geki=replay_data.get('num_gekis'),
             n_katu=replay_data.get('num_katus'),
-            n_misses=replay_data.get('num_misses'),
-            combo=replay_data.get('max_combo')
+            misses=replay_data.get('num_misses'),
+            combo=replay_data.get('max_combo'),
         )
         
-        result = perf_calc.performance(beatmap)
+        # Calculate the performance attributes (pp) using the difficulty attributes
+        # for better performance.
+        perf_attrs = perf_calc.calculate(diff_attrs)
         
         return {
-            "pp": result.pp,
+            "pp": perf_attrs.pp,
             "stars": diff_attrs.stars
         }
     except Exception as e:
