@@ -1,5 +1,6 @@
 import os
 from flask import Flask, jsonify
+from flask_cors import CORS # Import CORS
 from dotenv import load_dotenv
 
 import database
@@ -9,6 +10,7 @@ import parser
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app) # Enable CORS for all routes
 BEATMAP_CACHE = {}
 
 @app.route('/api/replays', methods=['GET'])
