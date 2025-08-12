@@ -130,11 +130,11 @@ def parse_osu_db(db_path):
             
             f.seek(8, 1) # slider_velocity
             if version >= 20140609:
+                # Determine the size of the star rating pairs based on the db version
+                pair_size = 10 if version >= 20250107 else 14
                 for _ in range(4): # Star rating difficulties for different modes
                     num_pairs = read_int(f)
-                    # Skip the pairs data
-                    f.seek(num_pairs * 14, 1)
-
+                    f.seek(num_pairs * pair_size, 1) # Skip the pairs data
 
             f.seek(12, 1) # drain_time, total_time, preview_time
             
