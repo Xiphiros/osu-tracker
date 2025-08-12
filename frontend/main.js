@@ -1,20 +1,24 @@
-import { scanReplays } from './services/api.js';
+import { getReplays, scanReplays, getPlayers } from './services/api.js';
 import { createScoresView, loadScores } from './views/ScoresView.js';
+import { createProfileView, loadProfile } from './views/ProfileView.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const mainContent = document.getElementById('main-content');
     const scanButton = document.getElementById('scan-button');
     const statusMessage = document.getElementById('status-message');
     const navLinks = document.querySelectorAll('.nav-link');
+    const userSelectorContainer = document.getElementById('user-selector-container');
+
+    let currentPlayer = null; // State to track the selected player
 
     const views = {
         scores: createScoresView(),
-        // Stubs for other views
+        profile: createProfileView(),
         beatmaps: createStubView('Beatmaps'),
-        profile: createStubView('Profile')
+        // The old 'profile' link will now be handled by the player selector
     };
     
-    // Add all views to the DOM, but keep them hidden
+    // Add all views to the DOM, but keep them hidden initially
     for (const key in views) {
         views[key].dataset.viewName = key;
         mainContent.appendChild(views[key]);
@@ -27,13 +31,40 @@ document.addEventListener('DOMContentLoaded', () => {
         return view;
     }
 
+    async function populatePlayerSelector() {
+        try {
+            const players = await getPlayers();
+            if (players.length > 0) {
+                const selector = document.createElement('select');
+                selector.id = 'player-selector';
+                selector.innerHTML = `<option value="">-- Select a Player --</option>`;
+                players.forEach(player => {
+                    selector.innerHTML += `<option value="${player}">${player}</option>`;
+                });
+                userSelectorContainer.innerHTML = '';
+                userSelectorContainer.appendChild(selector);
+                
+                selector.addEventListener('change', (e) => {
+                    currentPlayer = e.target.value;
+                    if (currentPlayer) {
+                        switchView('profile'); // Switch to profile view when a player is selected
+                    } else {
+                        switchView('scores'); // Go back to all scores if "Select" is chosen
+                    }
+                });
+            } else {
+                userSelectorContainer.innerHTML = '<p style="font-size: 0.8em; color: #aaa; text-align: center;">No players found. Scan for replays.</p>';
+            }
+        } catch (error) {
+            console.error("Failed to load players:", error);
+            userSelectorContainer.innerHTML = '<p style="font-size: 0.8em; color: #999;">Could not load players.</p>';
+        }
+    }
+
     function switchView(viewName) {
-        // Hide all views
         document.querySelectorAll('#main-content .view').forEach(v => v.classList.remove('active'));
-        // Deactivate all nav links
         navLinks.forEach(link => link.classList.remove('active'));
 
-        // Show the selected view and activate the link
         const view = views[viewName];
         const link = document.querySelector(`.nav-link[data-view="${viewName}"]`);
         
@@ -41,6 +72,8 @@ document.addEventListener('DOMContentLoaded', () => {
             view.classList.add('active');
             if (viewName === 'scores') {
                 loadScores(view);
+            } else if (viewName === 'profile') {
+                loadProfile(view, currentPlayer);
             }
         }
         if (link) {
@@ -52,6 +85,11 @@ document.addEventListener('DOMContentLoaded', () => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
             const viewName = e.target.getAttribute('data-view');
+            
+            if (viewName === 'profile' && !currentPlayer) {
+                statusMessage.textContent = 'Please select a player from the dropdown first.';
+                return;
+            }
             switchView(viewName);
         });
     });
@@ -62,10 +100,19 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const result = await scanReplays();
             statusMessage.textContent = result.status || 'Scan complete.';
-            // If we are on the scores view, refresh it
-            if (views.scores.classList.contains('active')) {
-                loadScores(views.scores);
+            
+            await populatePlayerSelector();
+            
+            const activeView = document.querySelector('#main-content .view.active');
+            if (activeView) {
+                const viewName = activeView.dataset.viewName;
+                if (viewName === 'scores') {
+                    loadScores(views.scores);
+                } else if (viewName === 'profile' && currentPlayer) {
+                    loadProfile(views.profile, currentPlayer);
+                }
             }
+
         } catch (error) {
             console.error('Error during scan:', error);
             statusMessage.textContent = 'Error during scan.';
@@ -74,6 +121,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Initialize the app by showing the default view
-    switchView('scores');
+    async function initializeApp() {
+        await populatePlayerSelector();
+        switchView('scores'); // Start on the main scores view
+    }
+
+    initializeApp();
 });
