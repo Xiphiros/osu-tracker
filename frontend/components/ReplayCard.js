@@ -46,7 +46,7 @@ export function createReplayCard(item) {
     extraDetails.className = 'card-extra-details';
     extraDetails.innerHTML = `
         <div class="detail-item"><span class="detail-label">Accuracy</span><span>${accuracy}%</span></div>
-        <div class="detail-item"><span class="detail-label">Max Combo</span><span>${item.max_combo}x</span></div>
+        <div class="detail-item"><span class="detail-label">Max Combo</span><span>${item.max_combo || 0}x</span></div>
         <div class="detail-item"><span class="detail-label">Played On</span><span>${playedAt}</span></div>`;
 
     card.append(wrapper, extraDetails);
