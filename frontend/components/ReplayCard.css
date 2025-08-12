@@ -33,12 +33,9 @@
     padding: 15px;
     box-sizing: border-box;
     flex-shrink: 0;
-
-    /* The gradient provides the overlay on the parent's background image */
-    background: linear-gradient(to right, rgba(0,0,0,0.90) 25%, rgba(0,0,0,0.5) 70%, rgba(0,0,0,0.2) 100%);
-    
-    /* Allow this section to grow and fill the card's expanded space */
-    flex-grow: 1; 
+    /* The gradient is now set dynamically in JS */
+    background-color: rgba(0,0,0,0.8); /* Fallback color */
+    flex-grow: 1;
 }
 
 .card-left {
