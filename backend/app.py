@@ -1,21 +1,37 @@
 import os
+import sys
 import logging
+import webbrowser
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
+from waitress import serve
 
 import database
 import parser
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+# Determine if running in a PyInstaller bundle
+IS_BUNDLED = getattr(sys, 'frozen', False)
 
-# Load environment variables from .env file
+# Configure logging, use INFO for bundled app, DEBUG for dev
+logging.basicConfig(
+    level=logging.INFO if IS_BUNDLED else logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# Load environment variables from .env file.
+# When bundled, the .env is expected to be next to the executable.
 load_dotenv()
 
-# Correctly configure Flask to serve all files from the frontend directory at the root URL
-app = Flask(__name__, static_folder='../frontend', static_url_path='')
-CORS(app) # Enable CORS for all routes
+# Set up static folder path.
+# In dev, it's relative to app.py. In bundled app, it's in the temp _MEIPASS dir.
+if IS_BUNDLED:
+    static_folder_path = os.path.join(sys._MEIPASS, 'frontend')
+else:
+    static_folder_path = os.path.join(os.path.dirname(__file__), '..', 'frontend')
+
+app = Flask(__name__, static_folder=static_folder_path, static_url_path='')
+CORS(app)
 BEATMAP_CACHE = {}
 
 @app.route('/api/replays', methods=['GET'])
@@ -155,12 +171,17 @@ def scan_replays_folder():
         logging.error(f"An error occurred during scan: {str(e)}", exc_info=True)
         return jsonify({"error": f"An error occurred during scan: {str(e)}"}), 500
     
-# This route now correctly serves index.html for the root path.
-# Other static files (like main.js, main.css) are handled automatically
-# by the static_folder and static_url_path config above.
-@app.route('/')
-def serve_index():
-    """Serves the main index.html file from the frontend folder."""
+# This route serves index.html for any path not caught by the API or static files.
+# This enables client-side routing.
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_index(path):
+    """Serves the main index.html file, supporting client-side routing."""
+    # Check if the requested path is for a static file (e.g., main.js, main.css)
+    # Flask's static file handling will take precedence for existing files.
+    # If it's not a known static file, serve index.html.
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
     return send_from_directory(app.static_folder, 'index.html')
 
 def load_beatmap_cache():
@@ -168,20 +189,29 @@ def load_beatmap_cache():
     global BEATMAP_CACHE
     osu_folder = os.getenv('OSU_FOLDER')
     if not osu_folder:
-        print("Warning: OSU_FOLDER not set. Cannot load beatmap cache.")
+        logging.warning("OSU_FOLDER not set. Cannot load beatmap cache.")
         return
     
     db_path = os.path.join(osu_folder, 'osu!.db')
     if not os.path.exists(db_path):
-        print(f"Warning: osu!.db not found at {db_path}. Cannot load beatmap cache.")
+        logging.warning(f"osu!.db not found at {db_path}. Cannot load beatmap cache.")
         return
         
-    print("Loading beatmap cache from osu!.db... This may take a moment.")
+    logging.info("Loading beatmap cache from osu!.db... This may take a moment.")
     BEATMAP_CACHE = parser.parse_osu_db(db_path)
-    print(f"Beatmap cache loaded with {len(BEATMAP_CACHE)} entries.")
+    logging.info(f"Beatmap cache loaded with {len(BEATMAP_CACHE)} entries.")
 
 
 if __name__ == '__main__':
     database.init_db()
     load_beatmap_cache()
-    app.run(debug=True, port=5000)
+    
+    # In a bundled app, open the browser automatically and use a production server.
+    if IS_BUNDLED:
+        logging.info("Starting server in bundled mode.")
+        webbrowser.open_new('http://127.0.0.1:5000/')
+        serve(app, host="127.0.0.1", port=5000)
+    else:
+        # Standard development server run.
+        logging.info("Starting server in development mode.")
+        app.run(debug=True, port=5000)
