@@ -32,9 +32,9 @@ h1 { margin: 0; font-size: 1.5em; }
     position: relative; background-size: cover; background-position: center;
     box-shadow: 0 4px 8px rgba(0,0,0,0.2); cursor: pointer;
     transition: max-height 0.4s ease-in-out;
-    max-height: 125px; /* Collapsed height */
+    max-height: 135px; /* Increased collapsed height */
 }
-.replay-card.card-expanded { max-height: 200px; } /* Expanded height */
+.replay-card.card-expanded { max-height: 210px; } /* Increased expanded height */
 .card-content-wrapper {
     background: linear-gradient(to right, rgba(0,0,0,0.90) 30%, rgba(0,0,0,0.3) 100%);
     display: flex; padding: 15px; height: 100%; box-sizing: border-box;
@@ -55,17 +55,27 @@ h1 { margin: 0; font-size: 1.5em; }
 .card-title { font-size: 1.1em; font-weight: bold; margin-bottom: 2px; }
 .card-difficulty { font-size: 0.9em; color: #ccc; }
 .card-player { font-size: 0.8em; color: #bbb; }
-.card-footer { display: flex; justify-content: space-between; align-items: flex-end; }
+.card-footer { display: flex; justify-content: space-between; align-items: center; }
 .card-score { font-size: 1.8em; font-weight: 500; line-height: 1; }
 .card-judgements { font-size: 0.8em; color: #bbb; line-height: 1.2; }
+
+.footer-controls { display: flex; align-items: center; gap: 15px; }
 .play-button {
     background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3);
     border-radius: 50%; width: 40px; height: 40px; font-size: 1.2em;
     display: grid; place-items: center; transition: background-color 0.2s;
 }
 .play-button:hover { background: rgba(255,255,255,0.2); }
+.expand-indicator {
+    font-size: 1.5em;
+    color: rgba(255, 255, 255, 0.5);
+    transition: transform 0.4s ease-in-out;
+}
+.card-expanded .expand-indicator {
+    transform: rotate(180deg);
+}
 .card-extra-details {
-    overflow: hidden; padding: 0 15px 10px 125px;
+    overflow: hidden; padding: 10px 15px 15px 125px;
     background-color: rgba(0,0,0,0.7);
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
     font-size: 0.9em;
