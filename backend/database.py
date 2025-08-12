@@ -13,7 +13,7 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Added pp, stars, map_max_combo, and played_at fields
+    # Added mods_used field
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS replays (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,6 +30,7 @@ def init_db():
             num_misses INTEGER,
             total_score INTEGER,
             max_combo INTEGER,
+            mods_used INTEGER,
             pp REAL,
             stars REAL,
             map_max_combo INTEGER,
