@@ -1,6 +1,6 @@
 import os
-from flask import Flask, jsonify
-from flask_cors import CORS # Import CORS
+from flask import Flask, jsonify, send_from_directory
+from flask_cors import CORS
 from dotenv import load_dotenv
 
 import database
@@ -15,17 +15,51 @@ BEATMAP_CACHE = {}
 
 @app.route('/api/replays', methods=['GET'])
 def get_replays():
-    """API endpoint to get all stored replay data."""
-    all_replays = database.get_all_replays()
-    return jsonify(all_replays)
+    """API endpoint to get all stored replay data, enriched with beatmap details."""
+    osu_folder = os.getenv('OSU_FOLDER')
+    if not osu_folder:
+        return jsonify({"error": "OSU_FOLDER path not set"}), 500
 
-@app.route('/api/beatmap/<string:md5_hash>', methods=['GET'])
-def get_beatmap_info(md5_hash):
-    """API endpoint to get specific beatmap info from the cache."""
-    beatmap_info = BEATMAP_CACHE.get(md5_hash)
-    if beatmap_info:
-        return jsonify(beatmap_info)
-    return jsonify({"error": "Beatmap not found in cache"}), 404
+    songs_path = os.path.join(osu_folder, 'Songs')
+    
+    all_replays = database.get_all_replays()
+    enriched_replays = []
+
+    for replay in all_replays:
+        beatmap_info = BEATMAP_CACHE.get(replay['beatmap_md5'])
+        enriched_replay = dict(replay) # Start with basic replay data
+
+        if beatmap_info:
+            enriched_replay['beatmap'] = beatmap_info
+            
+            # Construct path and parse the .osu file for more details
+            osu_file_path = os.path.join(
+                songs_path, 
+                beatmap_info['folder_name'], 
+                beatmap_info['osu_file_name']
+            )
+
+            # Sanity check path to prevent path traversal issues
+            if os.path.normpath(osu_file_path).startswith(os.path.normpath(songs_path)):
+                osu_details = parser.parse_osu_file(osu_file_path)
+                enriched_replay['beatmap'].update(osu_details)
+            else:
+                print(f"Warning: Skipped suspicious path: {osu_file_path}")
+
+        enriched_replays.append(enriched_replay)
+
+    return jsonify(enriched_replays)
+
+# New endpoint to serve song files (images, audio)
+@app.route('/api/songs/<path:file_path>')
+def serve_song_file(file_path):
+    """API endpoint to serve static files from the osu! Songs directory."""
+    osu_folder = os.getenv('OSU_FOLDER')
+    if not osu_folder:
+        return jsonify({"error": "OSU_FOLDER path not set"}), 500
+    
+    songs_dir = os.path.join(osu_folder, 'Songs')
+    return send_from_directory(songs_dir, file_path)
 
 @app.route('/api/scan', methods=['POST'])
 def scan_replays_folder():
