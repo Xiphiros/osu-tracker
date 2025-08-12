@@ -182,16 +182,18 @@ def parse_osu_db(db_path):
 
 def parse_osu_file(file_path):
     """
-    Parses a .osu file to find audio/background filenames and min/max BPM.
-    Note: This is a simplified parser and might not cover all edge cases.
+    Parses a .osu file to find audio/background filenames and detailed BPM info,
+    including the duration-weighted main BPM.
     """
     data = {
         "audio_file": None, 
         "background_file": None,
+        "bpm": None,
         "bpm_min": None,
         "bpm_max": None
     }
-    timing_bpms = []
+    uninherited_timing_points = []
+    last_object_time = 0
     
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -210,7 +212,6 @@ def parse_osu_file(file_path):
                         data["audio_file"] = line.split(":", 1)[1].strip()
                 
                 elif current_section == "[Events]":
-                    # [cite_start]Find the first background image entry [cite: 71, 76]
                     if data.get("background_file") is None and (line.startswith("0,0,") or line.startswith("Image,")):
                         parts = line.split(',')
                         if len(parts) >= 3:
@@ -218,25 +219,56 @@ def parse_osu_file(file_path):
 
                 elif current_section == "[TimingPoints]":
                     parts = line.split(',')
-                    if len(parts) < 8:
-                        continue
-                    
-                    # [cite_start]An uninherited timing point defines a new BPM [cite: 110]
-                    is_uninherited = parts[6].strip() == '1'
-                    if is_uninherited:
-                        # [cite_start]beatLength is the duration of a beat in milliseconds [cite: 103]
+                    if len(parts) >= 8 and parts[6].strip() == '1': # Is uninherited
                         beat_length = float(parts[1].strip())
                         if beat_length > 0:
-                            # [cite_start]Formula to convert beat length to BPM [cite: 126]
-                            bpm = 60000.0 / beat_length
-                            timing_bpms.append(bpm)
-        
-        if timing_bpms:
-            data['bpm_min'] = min(timing_bpms)
-            data['bpm_max'] = max(timing_bpms)
+                            time = int(float(parts[0].strip()))
+                            # Round to 2 decimal places to group very similar BPMs
+                            bpm = round(60000.0 / beat_length, 2)
+                            uninherited_timing_points.append({'time': time, 'bpm': bpm})
+
+                elif current_section == "[HitObjects]":
+                    parts = line.split(',')
+                    if len(parts) < 4: continue
+                    
+                    obj_time = int(parts[2].strip())
+                    obj_type = int(parts[3].strip())
+
+                    end_time = obj_time
+                    if obj_type & 8: # Spinner
+                        if len(parts) > 5: end_time = int(parts[5].strip())
+                    elif obj_type & 128: # Mania Hold
+                        if len(parts) > 5: end_time = int(parts[5].split(':')[0].strip())
+                    
+                    last_object_time = max(last_object_time, end_time)
+
+        if uninherited_timing_points:
+            uninherited_timing_points.sort(key=lambda p: p['time'])
+            
+            all_bpms = [p['bpm'] for p in uninherited_timing_points]
+            data['bpm_min'] = min(all_bpms)
+            data['bpm_max'] = max(all_bpms)
+
+            if len(uninherited_timing_points) == 1:
+                data['bpm'] = uninherited_timing_points[0]['bpm']
+            else:
+                bpm_durations = {}
+                for i, point in enumerate(uninherited_timing_points):
+                    start_time = point['time']
+                    end_time = last_object_time
+                    if i + 1 < len(uninherited_timing_points):
+                        end_time = uninherited_timing_points[i+1]['time']
+                    
+                    duration = end_time - start_time
+                    if duration > 0:
+                        bpm_durations[point['bpm']] = bpm_durations.get(point['bpm'], 0) + duration
+                
+                if bpm_durations:
+                    data['bpm'] = max(bpm_durations, key=bpm_durations.get)
 
     except Exception as e:
-        print(f"Warning: Could not parse {file_path}: {e}")
+        print(f"Warning: Could not parse {file_path} for detailed BPM: {e}")
+        
     return data
 
 def calculate_pp(osu_file_path, replay_data):
