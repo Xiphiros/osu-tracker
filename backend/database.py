@@ -88,3 +88,14 @@ if __name__ == '__main__':
     # This will run only when you execute `python backend/database.py` directly.
     # It sets up the database file and the table.
     init_db()
+
+def update_replay_pp(replay_md5, pp, stars):
+    """Updates the pp and stars for an existing replay record."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE replays SET pp = ?, stars = ? WHERE replay_md5 = ?",
+        (pp, stars, replay_md5)
+    )
+    conn.commit()
+    conn.close()
