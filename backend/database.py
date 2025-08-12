@@ -71,6 +71,15 @@ def get_all_replays():
     conn.close()
     return replays
 
+def get_unique_players():
+    """Retrieves a list of unique player names from the replays table."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT player_name FROM replays ORDER BY player_name")
+    players = [row['player_name'] for row in cursor.fetchall()]
+    conn.close()
+    return players
+
 if __name__ == '__main__':
     # This will run only when you execute `python backend/database.py` directly.
     # It sets up the database file and the table.
