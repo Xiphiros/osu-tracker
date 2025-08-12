@@ -64,7 +64,8 @@ def get_replays():
                     database.update_replay_pp(
                         enriched_replay['replay_md5'],
                         pp_info['pp'],
-                        pp_info['stars']
+                        pp_info['stars'],
+                        pp_info['map_max_combo']
                     )
 
             if os.path.normpath(osu_file_path).startswith(os.path.normpath(songs_path)):
