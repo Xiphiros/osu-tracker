@@ -69,11 +69,20 @@ def add_replay(replay_data):
     conn.commit()
     conn.close()
     
-def get_all_replays():
-    """Retrieves all replay records from the database."""
+def get_all_replays(player_name=None):
+    """Retrieves all replay records from the database, optionally filtering by player name."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM replays ORDER BY parsed_at DESC")
+    query = "SELECT * FROM replays"
+    params = []
+    if player_name:
+        query += " WHERE player_name = ?"
+        params.append(player_name)
+    
+    # Order by date played, most recent first, which is a better user-facing default.
+    query += " ORDER BY played_at DESC"
+    
+    cursor.execute(query, params)
     replays = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return replays
