@@ -172,3 +172,30 @@ main#main-content {
 .profile-filters input::placeholder {
     color: #999;
 }
+
+.mod-filter-container {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-basis: 100%; /* Make container take full width of the filter bar */
+    order: -1; /* Display mod buttons before other filters */
+}
+.mod-button {
+    background-color: #333;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+.mod-button:hover {
+    border-color: #888;
+}
+.mod-button.active {
+    background-color: var(--accent-color);
+    border-color: var(--accent-hover);
+    color: white;
+    font-weight: bold;
+}
