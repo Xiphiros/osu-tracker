@@ -51,6 +51,7 @@ def get_replays():
     for replay in all_replays:
         beatmap_info = BEATMAP_CACHE.get(replay['beatmap_md5'])
         enriched_replay = dict(replay)
+        
         if beatmap_info:
             enriched_replay['beatmap'] = beatmap_info
             game_mode = enriched_replay.get('game_mode')
@@ -65,6 +66,8 @@ def get_replays():
             osu_file_path = os.path.join(
                 songs_path, beatmap_info['folder_name'], beatmap_info['osu_file_name']
             )
+
+            # Backfill PP for any scores missing it
             if enriched_replay.get('pp') is None and os.path.exists(osu_file_path):
                 pp_info = parser.calculate_pp(osu_file_path, enriched_replay)
                 if pp_info and pp_info.get('pp') is not None:
@@ -72,9 +75,25 @@ def get_replays():
                     database.update_replay_pp(
                         enriched_replay['replay_md5'], pp_info['pp'], pp_info['stars'], pp_info['map_max_combo']
                     )
-            if os.path.normpath(osu_file_path).startswith(os.path.normpath(songs_path)):
+
+            # Backfill detailed BPM for any scores missing it
+            if enriched_replay.get('bpm_min') is None and os.path.exists(osu_file_path):
                 osu_details = parser.parse_osu_file(osu_file_path)
-                enriched_replay['beatmap'].update(osu_details)
+                if osu_details.get('bpm') is not None:
+                    enriched_replay.update(osu_details)
+                    database.update_replay_bpm(
+                        enriched_replay['replay_md5'],
+                        osu_details.get('bpm'),
+                        osu_details.get('bpm_min'),
+                        osu_details.get('bpm_max')
+                    )
+
+            # Add background/audio file details for the card
+            if os.path.normpath(osu_file_path).startswith(os.path.normpath(songs_path)):
+                osu_file_details = parser.parse_osu_file(osu_file_path)
+                enriched_replay['beatmap']['audio_file'] = osu_file_details.get('audio_file')
+                enriched_replay['beatmap']['background_file'] = osu_file_details.get('background_file')
+
         enriched_replays.append(enriched_replay)
     return jsonify(enriched_replays)
 
