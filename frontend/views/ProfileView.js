@@ -1,32 +1,12 @@
 import { getReplays, getPlayerStats } from '../services/api.js';
 import { createReplayCard } from '../components/ReplayCard.js';
+import { getModsFromInt } from '../utils/mods.js'; // Import from new utility file
 
 let allScores = [];
 let viewInitialized = false;
 const activeModFilters = new Set();
 
 // --- Helper Functions ---
-
-const MODS = {
-    NF: 1, EZ: 2, TD: 4, HD: 8, HR: 16, SD: 32, DT: 64, RX: 128, HT: 256, NC: 512, FL: 1024,
-};
-
-function getModsFromInt(modInt) {
-    const activeMods = [];
-    if (modInt & MODS.NC) {
-        activeMods.push('NC');
-    } else if (modInt & MODS.DT) {
-        activeMods.push('DT');
-    }
-    for (const modName in MODS) {
-        if (modName === 'DT' || modName === 'NC') continue;
-        if (modInt & MODS[modName]) {
-            activeMods.push(modName);
-        }
-    }
-    return activeMods;
-}
-
 function calculateAccuracy(replay) {
     const totalHits = replay.num_300s + replay.num_100s + replay.num_50s + replay.num_misses;
     if (totalHits === 0) return 0;
@@ -34,7 +14,6 @@ function calculateAccuracy(replay) {
 }
 
 // --- Main View and Logic ---
-
 function applyFiltersAndRender(viewElement) {
     const replaysContainer = viewElement.querySelector('#profile-replays-container');
     replaysContainer.innerHTML = '';
