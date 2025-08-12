@@ -13,15 +13,13 @@ const MODS = {
 
 function getModsFromInt(modInt) {
     const activeMods = [];
-    // Handle NC, which is DT+NC. If NC is present, we don't also add DT.
     if (modInt & MODS.NC) {
         activeMods.push('NC');
     } else if (modInt & MODS.DT) {
         activeMods.push('DT');
     }
-    // Check other mods
     for (const modName in MODS) {
-        if (modName === 'DT' || modName === 'NC') continue; // Already handled
+        if (modName === 'DT' || modName === 'NC') continue;
         if (modInt & MODS[modName]) {
             activeMods.push(modName);
         }
@@ -47,7 +45,6 @@ function applyFiltersAndRender(viewElement) {
 
     let filteredScores = allScores;
 
-    // Apply filters
     if (activeModFilters.size > 0) {
         filteredScores = filteredScores.filter(replay => {
             const replayMods = new Set(getModsFromInt(replay.mods_used));
@@ -61,7 +58,6 @@ function applyFiltersAndRender(viewElement) {
         filteredScores = filteredScores.filter(replay => (replay.stars || 0) >= minStars);
     }
 
-    // Apply sorting
     filteredScores.sort((a, b) => {
         switch (sortValue) {
             case 'pp': return (b.pp || 0) - (a.pp || 0);
@@ -72,7 +68,6 @@ function applyFiltersAndRender(viewElement) {
         }
     });
     
-    // Render the cards
     if (filteredScores.length > 0) {
         filteredScores.forEach(replay => replaysContainer.appendChild(createReplayCard(replay)));
     } else {
@@ -81,7 +76,7 @@ function applyFiltersAndRender(viewElement) {
      document.getElementById('status-message').textContent = `Displaying ${filteredScores.length} scores.`;
 }
 
-function createProfileView() {
+export function createProfileView() {
     const view = document.createElement('div');
     view.id = 'profile-view';
     view.className = 'view';
@@ -120,8 +115,8 @@ export async function loadProfile(viewElement, playerName) {
 
     nameHeader.textContent = `${playerName}'s Profile`;
     statsContainer.innerHTML = 'Loading stats...';
-    modContainer.innerHTML = ''; // Clear old mod buttons
-    activeModFilters.clear(); // Clear active filters
+    modContainer.innerHTML = ''; 
+    activeModFilters.clear(); 
     statusMessage.textContent = `Loading ${playerName}'s profile...`;
     
     if (!viewInitialized) {
@@ -142,7 +137,6 @@ export async function loadProfile(viewElement, playerName) {
 
         allScores = replays;
         
-        // Dynamically create mod buttons
         const uniqueMods = [...new Set(replays.flatMap(r => getModsFromInt(r.mods_used)))].sort();
         uniqueMods.forEach(mod => {
             const button = document.createElement('button');
