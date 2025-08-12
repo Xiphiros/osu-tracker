@@ -183,12 +183,12 @@ def calculate_pp(osu_file_path, replay_data):
         # Map integer game mode from replay to rosu_pp_py.GameMode enum
         game_mode_int = replay_data.get('game_mode', 0)
         mode_map = {
-            0: rosu_pp_py.GameMode.OSU,
-            1: rosu_pp_py.GameMode.TAIKO,
-            2: rosu_pp_py.GameMode.CATCH,
-            3: rosu_pp_py.GameMode.MANIA,
+            0: rosu_pp_py.GameMode.Osu,
+            1: rosu_pp_py.GameMode.Taiko,
+            2: rosu_pp_py.GameMode.Catch,
+            3: rosu_pp_py.GameMode.Mania,
         }
-        mode = mode_map.get(game_mode_int, rosu_pp_py.GameMode.OSU)
+        mode = mode_map.get(game_mode_int, rosu_pp_py.GameMode.Osu)
         
         beatmap = rosu_pp_py.Beatmap(path=osu_file_path)
         
