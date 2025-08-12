@@ -32,7 +32,7 @@
 }
 
 .replay-card.card-expanded {
-    max-height: 240px;
+    max-height: 260px;
 }
 
 /* All direct children of the card must have a higher z-index to appear over the overlay */
