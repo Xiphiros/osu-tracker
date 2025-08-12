@@ -28,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.style.backgroundImage = `url(${apiBaseUrl}/songs/${encodeURIComponent(beatmap.folder_name)}/${encodeURIComponent(beatmap.background_file)})`;
             }
 
-            // --- Main visible content ---
             const wrapper = document.createElement('div');
             wrapper.className = 'card-content-wrapper';
             
@@ -49,11 +48,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="card-score">${item.total_score.toLocaleString()}</div>
                         <div class="card-judgements">300:${item.num_300s} 100:${item.num_100s} 50:${item.num_50s} X:${item.num_misses}</div>
                     </div>
-                    <button class="play-button">▶</button>
+                    <div class="footer-controls">
+                        <button class="play-button">▶</button>
+                        <div class="expand-indicator">▼</div>
+                    </div>
                 </div>`;
             wrapper.append(rankEmblem, right);
 
-            // --- Hidden expandable content ---
             const totalHits = item.num_300s + item.num_100s + item.num_50s + item.num_misses;
             const accuracy = totalHits > 0 ? ((item.num_300s * 300 + item.num_100s * 100 + item.num_50s * 50) / (totalHits * 300) * 100).toFixed(2) : "0.00";
             const playedAt = beatmap.last_played_date ? new Date(beatmap.last_played_date).toLocaleDateString() : "Unknown";
@@ -68,15 +69,12 @@ document.addEventListener('DOMContentLoaded', () => {
             card.append(wrapper, extraDetails);
             container.appendChild(card);
             
-            // --- Event Listeners ---
             const playButton = card.querySelector('.play-button');
-            playButton.addEventListener('click', (e) => {
-                e.stopPropagation(); // Don't trigger card expand
-                // Audio logic...
+            card.addEventListener('click', (e) => {
+                if(playButton.contains(e.target)) return; // Don't expand if click was on play button
+                card.classList.toggle('card-expanded');
             });
-
-            card.addEventListener('click', () => card.classList.toggle('card-expanded'));
-
+            
             if (beatmap.folder_name && beatmap.audio_file) {
                  const audio = new Audio(`${apiBaseUrl}/songs/${encodeURIComponent(beatmap.folder_name)}/${encodeURIComponent(beatmap.audio_file)}`);
                  playButton.addEventListener('click', e => {
