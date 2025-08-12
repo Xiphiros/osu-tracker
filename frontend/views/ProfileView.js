@@ -3,20 +3,26 @@ import { createReplayCard } from '../components/ReplayCard.js';
 
 let allScores = [];
 let viewInitialized = false;
+const activeModFilters = new Set();
 
 // --- Helper Functions ---
 
-// Based on the .osr file format spec for the Mods integer
 const MODS = {
     NF: 1, EZ: 2, TD: 4, HD: 8, HR: 16, SD: 32, DT: 64, RX: 128, HT: 256, NC: 512, FL: 1024,
 };
 
 function getModsFromInt(modInt) {
     const activeMods = [];
+    // Handle NC, which is DT+NC. If NC is present, we don't also add DT.
+    if (modInt & MODS.NC) {
+        activeMods.push('NC');
+    } else if (modInt & MODS.DT) {
+        activeMods.push('DT');
+    }
+    // Check other mods
     for (const modName in MODS) {
+        if (modName === 'DT' || modName === 'NC') continue; // Already handled
         if (modInt & MODS[modName]) {
-            // Special case: NC is DT + NC. Don't show DT if NC is present.
-            if (modName === 'DT' && (modInt & MODS.NC)) continue;
             activeMods.push(modName);
         }
     }
@@ -35,17 +41,18 @@ function applyFiltersAndRender(viewElement) {
     const replaysContainer = viewElement.querySelector('#profile-replays-container');
     replaysContainer.innerHTML = '';
 
-    // Get current filter values from the UI
     const sortValue = viewElement.querySelector('#sort-select').value;
-    const modFilter = viewElement.querySelector('#mod-filter').value.toUpperCase().trim();
     const minAcc = parseFloat(viewElement.querySelector('#acc-filter').value) || 0;
     const minStars = parseFloat(viewElement.querySelector('#stars-filter').value) || 0;
 
     let filteredScores = allScores;
 
     // Apply filters
-    if (modFilter) {
-        filteredScores = filteredScores.filter(replay => getModsFromInt(replay.mods_used).includes(modFilter));
+    if (activeModFilters.size > 0) {
+        filteredScores = filteredScores.filter(replay => {
+            const replayMods = new Set(getModsFromInt(replay.mods_used));
+            return [...activeModFilters].every(mod => replayMods.has(mod));
+        });
     }
     if (minAcc > 0) {
         filteredScores = filteredScores.filter(replay => calculateAccuracy(replay) >= minAcc);
@@ -67,18 +74,14 @@ function applyFiltersAndRender(viewElement) {
     
     // Render the cards
     if (filteredScores.length > 0) {
-        filteredScores.forEach(replay => {
-            const card = createReplayCard(replay);
-            replaysContainer.appendChild(card);
-        });
+        filteredScores.forEach(replay => replaysContainer.appendChild(createReplayCard(replay)));
     } else {
         replaysContainer.innerHTML = '<p>No scores match the current filters.</p>';
     }
      document.getElementById('status-message').textContent = `Displaying ${filteredScores.length} scores.`;
 }
 
-
-export function createProfileView() {
+function createProfileView() {
     const view = document.createElement('div');
     view.id = 'profile-view';
     view.className = 'view';
@@ -87,13 +90,13 @@ export function createProfileView() {
             <h2 id="profile-player-name"></h2>
             <div id="profile-stats" class="stats-container"></div>
             <div class="profile-filters">
+                <div id="mod-filter-container" class="mod-filter-container"></div>
                 <select id="sort-select">
                     <option value="pp">Sort by: Highest PP</option>
                     <option value="score">Sort by: Highest Score</option>
                     <option value="date">Sort by: Most Recent</option>
                     <option value="stars">Sort by: Highest Stars</option>
                 </select>
-                <input type="text" id="mod-filter" placeholder="Filter by mod (e.g. HD)">
                 <input type="number" id="acc-filter" min="0" max="100" step="0.1" placeholder="Min Accuracy %">
                 <input type="number" id="stars-filter" min="0" step="0.1" placeholder="Min Stars ★">
             </div>
@@ -113,24 +116,23 @@ export async function loadProfile(viewElement, playerName) {
     const nameHeader = viewElement.querySelector('#profile-player-name');
     const statsContainer = viewElement.querySelector('#profile-stats');
     const statusMessage = document.getElementById('status-message');
+    const modContainer = viewElement.querySelector('#mod-filter-container');
 
     nameHeader.textContent = `${playerName}'s Profile`;
     statsContainer.innerHTML = 'Loading stats...';
+    modContainer.innerHTML = ''; // Clear old mod buttons
+    activeModFilters.clear(); // Clear active filters
     statusMessage.textContent = `Loading ${playerName}'s profile...`;
     
-    // Set up event listeners only once
     if (!viewInitialized) {
-        viewElement.querySelectorAll('.profile-filters > *').forEach(el => {
+        viewElement.querySelectorAll('#sort-select, #acc-filter, #stars-filter').forEach(el => {
             el.addEventListener('input', () => applyFiltersAndRender(viewElement));
         });
         viewInitialized = true;
     }
 
     try {
-        const [stats, replays] = await Promise.all([
-            getPlayerStats(playerName),
-            getReplays(playerName)
-        ]);
+        const [stats, replays] = await Promise.all([getPlayerStats(playerName), getReplays(playerName)]);
 
         statsContainer.innerHTML = `
             <div class="stat-item"><span class="stat-label">Total PP</span><span class="stat-value">${stats.total_pp.toLocaleString()}</span></div>
@@ -139,6 +141,26 @@ export async function loadProfile(viewElement, playerName) {
         `;
 
         allScores = replays;
+        
+        // Dynamically create mod buttons
+        const uniqueMods = [...new Set(replays.flatMap(r => getModsFromInt(r.mods_used)))].sort();
+        uniqueMods.forEach(mod => {
+            const button = document.createElement('button');
+            button.className = 'mod-button';
+            button.textContent = mod;
+            button.dataset.mod = mod;
+            button.addEventListener('click', () => {
+                button.classList.toggle('active');
+                if (activeModFilters.has(mod)) {
+                    activeModFilters.delete(mod);
+                } else {
+                    activeModFilters.add(mod);
+                }
+                applyFiltersAndRender(viewElement);
+            });
+            modContainer.appendChild(button);
+        });
+
         applyFiltersAndRender(viewElement);
 
     } catch (error) {
