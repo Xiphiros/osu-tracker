@@ -1,6 +1,6 @@
 import struct
 import lzma
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def read_byte(file):
     """Reads a 1-byte integer from the file."""
@@ -25,6 +25,14 @@ def read_float(file):
 def read_double(file):
     """Reads an 8-byte double-precision float from the file."""
     return struct.unpack('<d', file.read(8))[0]
+
+def read_windows_ticks(file):
+    """Reads an 8-byte Windows Ticks value and converts it to an ISO string."""
+    ticks = read_long(file)
+    if ticks == 0:
+        return None
+    # Convert from 100-nanosecond intervals since 1/1/0001 to a datetime object
+    return (datetime(1, 1, 1) + timedelta(microseconds=ticks / 10)).isoformat()
 
 def read_uleb128(file):
     """Reads a ULEB128-encoded integer from the file."""
@@ -62,51 +70,9 @@ def parse_replay_file(file_path):
         replay_data['num_katus'] = read_short(f)
         replay_data['num_misses'] = read_short(f)
         replay_data['total_score'] = read_int(f)
+        # Note: The provided .osr reference is incomplete. Max combo follows total score.
+        replay_data['max_combo'] = read_short(f)
         return replay_data
-    
-def parse_osu_file(file_path):
-    """
-    Parses a .osu file to find the audio and background filenames.
-    Note: This is a simplified parser and might not cover all edge cases.
-    """
-    data = {"audio_file": None, "background_file": None}
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            in_events_section = False
-            for line in f:
-                line = line.strip()
-
-                # Find audio file in [General] section
-                if line.startswith("AudioFilename:"):
-                    data["audio_file"] = line.split(":", 1)[1].strip()
-
-                # Find background file in [Events] section
-                if line == "[Events]":
-                    in_events_section = True
-                    continue
-                
-                if in_events_section:
-                    # Background is usually the first event of type 0 or "Image"
-                    # Format: eventType,startTime,eventParams
-                    # e.g., 0,0,"bg.jpg",0,0
-                    if line.startswith("0,0,") or line.startswith("Image,"):
-                        parts = line.split(',')
-                        if len(parts) >= 3:
-                            # The filename is the third part, strip quotes
-                            bg_file = parts[2].strip('"')
-                            data["background_file"] = bg_file
-                            # Assume we found it and stop looking in this section
-                            in_events_section = False
-                
-                # Stop if we found both
-                if data["audio_file"] and data["background_file"]:
-                    break
-    except FileNotFoundError:
-        print(f"Warning: .osu file not found at {file_path}")
-    except Exception as e:
-        print(f"Error parsing .osu file {file_path}: {e}")
-
-    return data
 
 def parse_osu_db(db_path):
     """Parses the osu!.db file and returns a dictionary of beatmaps keyed by MD5 hash."""
@@ -120,7 +86,6 @@ def parse_osu_db(db_path):
         num_beatmaps = read_int(f)
 
         for _ in range(num_beatmaps):
-            # The beatmap entry size is only present in older versions
             if version < 20191106:
                 read_int(f)
 
@@ -134,105 +99,79 @@ def parse_osu_db(db_path):
             md5_hash = read_string(f)
             osu_file_name = read_string(f)
             f.seek(1, 1) # ranked_status
-            
             num_hitcircles = read_short(f)
             num_sliders = read_short(f)
             num_spinners = read_short(f)
-            
             f.seek(8, 1) # last_mod_time
 
-            # Difficulty stats data type varies by version
             if version < 20140609:
-                ar = float(read_byte(f))
-                cs = float(read_byte(f))
-                hp = float(read_byte(f))
-                od = float(read_byte(f))
+                ar, cs, hp, od = float(read_byte(f)), float(read_byte(f)), float(read_byte(f)), float(read_byte(f))
             else:
-                ar = read_float(f)
-                cs = read_float(f)
-                hp = read_float(f)
-                od = read_float(f)
+                ar, cs, hp, od = read_float(f), read_float(f), read_float(f), read_float(f)
             
             f.seek(8, 1) # slider_velocity
-
-            # Star rating pairs vary by version
             if version >= 20140609:
-                for _ in range(4): # For each game mode
+                for _ in range(4):
                     num_pairs = read_int(f)
-                    pair_size = 14 if version < 20250107 else 10 
-                    f.seek(num_pairs * pair_size, 1)
+                    f.seek(num_pairs * (14 if version < 20250107 else 10), 1)
 
-            f.seek(4, 1) # drain_time
-            f.seek(4, 1) # total_time
-            f.seek(4, 1) # preview_time
-
+            f.seek(12, 1) # drain_time, total_time, preview_time
             num_timing_points = read_int(f)
             bpm = 0.0
             for i in range(num_timing_points):
-                tp_bpm = read_double(f)
-                read_double(f) # offset
-                tp_inherited = read_byte(f)
-                if not tp_inherited: 
-                    if tp_bpm > 0:
-                        bpm = 60000.0 / tp_bpm
+                tp_bpm, _, tp_inherited = read_double(f), read_double(f), read_byte(f)
+                if not tp_inherited and tp_bpm > 0:
+                    bpm = 60000.0 / tp_bpm
                     f.seek((num_timing_points - 1 - i) * 17, 1)
                     break
-                elif i == 0:
-                    if tp_bpm > 0:
-                        bpm = 60000.0 / tp_bpm
-
-            f.seek(4, 1) # difficulty_id
-            f.seek(4, 1) # beatmap_id
-            f.seek(4, 1) # thread_id
             
-            # Read the grades for each mode
-            grades = {
-                "osu": read_byte(f),
-                "taiko": read_byte(f),
-                "ctb": read_byte(f),
-                "mania": read_byte(f)
-            }
-
-            f.seek(2, 1) # local_offset
-            f.seek(4, 1) # stack_leniency
-            f.seek(1, 1) # gameplay_mode
-
+            f.seek(12, 1) # difficulty_id, beatmap_id, thread_id
+            grades = {"osu": read_byte(f), "taiko": read_byte(f), "ctb": read_byte(f), "mania": read_byte(f)}
+            f.seek(7, 1) # local_offset, stack_leniency, gameplay_mode
             read_string(f) # song_source
             read_string(f) # song_tags
             f.seek(2, 1) # online_offset
             read_string(f) # font
             f.seek(1, 1) # is_unplayed
-            f.seek(8, 1) # last_time_played
+            last_played_date = read_windows_ticks(f) # Read last played time
             f.seek(1, 1) # is_osz2
-            
             folder_name = read_string(f)
-            
             f.seek(8, 1) # last_time_checked
             f.seek(5, 1) # ignore_flags
-            
-            if version < 20140609:
-                f.seek(2, 1)
-
-            f.seek(4, 1) # last_modification_time
-            f.seek(1, 1) # mania_scroll_speed
+            if version < 20140609: f.seek(2, 1)
+            f.seek(5, 1) # last_modification_time, mania_scroll_speed
 
             if md5_hash:
                 beatmaps[md5_hash] = {
-                    "artist": artist,
-                    "title": title,
-                    "creator": creator,
-                    "difficulty": difficulty,
-                    "folder_name": folder_name,
-                    "osu_file_name": osu_file_name,
-                    "grades": grades,
-                    "num_hitcircles": num_hitcircles,
-                    "num_sliders": num_sliders,
-                    "num_spinners": num_spinners,
-                    "total_objects": num_hitcircles + num_sliders + num_spinners,
-                    "ar": round(ar, 2),
-                    "cs": round(cs, 2),
-                    "hp": round(hp, 2),
-                    "od": round(od, 2),
-                    "bpm": round(bpm, 2)
+                    "artist": artist, "title": title, "creator": creator, "difficulty": difficulty,
+                    "folder_name": folder_name, "osu_file_name": osu_file_name, "grades": grades,
+                    "last_played_date": last_played_date,
+                    "num_hitcircles": num_hitcircles, "num_sliders": num_sliders, "num_spinners": num_spinners,
+                    "ar": round(ar, 2), "cs": round(cs, 2), "hp": round(hp, 2), "od": round(od, 2), "bpm": round(bpm, 2)
                 }
     return beatmaps
+
+def parse_osu_file(file_path):
+    """
+    Parses a .osu file to find the audio and background filenames.
+    Note: This is a simplified parser and might not cover all edge cases.
+    """
+    data = {"audio_file": None, "background_file": None}
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            in_events_section = False
+            for line in f:
+                line = line.strip()
+                if line.startswith("AudioFilename:"):
+                    data["audio_file"] = line.split(":", 1)[1].strip()
+                if line == "[Events]":
+                    in_events_section = True
+                    continue
+                if in_events_section and (line.startswith("0,0,") or line.startswith("Image,")):
+                    parts = line.split(',')
+                    if len(parts) >= 3:
+                        data["background_file"] = parts[2].strip('"')
+                        break
+    except Exception as e:
+        print(f"Warning: Could not parse {file_path}: {e}")
+    return data
