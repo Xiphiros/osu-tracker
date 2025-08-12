@@ -39,7 +39,7 @@ def init_db():
     conn.commit()
     conn.close()
     print("Database initialized successfully.")
-    
+
 def add_replay(replay_data):
     """Adds a new replay record to the database. Ignores duplicates based on replay_md5."""
     conn = get_db_connection()
@@ -49,8 +49,9 @@ def add_replay(replay_data):
     cursor.execute('''
         INSERT OR IGNORE INTO replays (
             game_mode, game_version, beatmap_md5, player_name, replay_md5,
-            num_300s, num_100s, num_50s, num_gekis, num_katus, num_misses, total_score, max_combo
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            num_300s, num_100s, num_50s, num_gekis, num_katus, num_misses,
+            total_score, max_combo, pp, stars
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         replay_data.get('game_mode'), replay_data.get('game_version'),
         replay_data.get('beatmap_md5'), replay_data.get('player_name'),
@@ -58,12 +59,13 @@ def add_replay(replay_data):
         replay_data.get('num_100s'), replay_data.get('num_50s'),
         replay_data.get('num_gekis'), replay_data.get('num_katus'),
         replay_data.get('num_misses'), replay_data.get('total_score'),
-        replay_data.get('max_combo')
+        replay_data.get('max_combo'), replay_data.get('pp'),
+        replay_data.get('stars')
     ))
     
     conn.commit()
     conn.close()
-    
+      
 def get_all_replays():
     """Retrieves all replay records from the database."""
     conn = get_db_connection()
