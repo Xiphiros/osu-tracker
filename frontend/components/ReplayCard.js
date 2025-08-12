@@ -24,6 +24,24 @@ export function createReplayCard(item) {
 
     const right = document.createElement('div');
     right.className = 'card-right';
+
+    // --- BPM Display Logic ---
+    const mainBpm = beatmap.bpm ? Math.round(beatmap.bpm) : null;
+    const minBpm = beatmap.bpm_min ? Math.round(beatmap.bpm_min) : null;
+    const maxBpm = beatmap.bpm_max ? Math.round(beatmap.bpm_max) : null;
+
+    let bpmText;
+    if (mainBpm) {
+        // If min/max are available and they differ by more than 1, show the range.
+        if (minBpm && maxBpm && (maxBpm - minBpm) > 1) {
+            bpmText = `${minBpm}-${maxBpm} (${mainBpm})`;
+        } else {
+            bpmText = `${mainBpm}`;
+        }
+    } else {
+        bpmText = 'N/A';
+    }
+
     right.innerHTML = `
         <div>
             <div class="card-title" title="${beatmap.artist} - ${beatmap.title}">${beatmap.artist || 'Unknown Artist'} - ${beatmap.title || 'Unknown Title'}</div>
@@ -31,7 +49,7 @@ export function createReplayCard(item) {
             <div class="card-player">Played by ${item.player_name || 'Unknown Player'}</div>
             <div class="card-stats">
                 <span class="stat-stars">★ ${item.stars ? item.stars.toFixed(2) : 'N/A'}</span>
-                <span class="stat-bpm">♫ ${beatmap.bpm ? Math.round(beatmap.bpm) : 'N/A'} BPM</span>
+                <span class="stat-bpm">♫ ${bpmText} BPM</span>
             </div>
         </div>
         <div class="card-footer">
