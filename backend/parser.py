@@ -204,9 +204,10 @@ def calculate_pp(osu_file_path, replay_data):
         
         return {
             "pp": perf_attrs.pp,
-            "stars": diff_attrs.stars
+            "stars": diff_attrs.stars,
+            "map_max_combo": diff_attrs.max_combo
         }
     except Exception as e:
         # Return default values if calculation fails for any reason
         print(f"Warning: Could not calculate PP for {osu_file_path}: {e}")
-        return {"pp": None, "stars": None}
+        return {"pp": None, "stars": None, "map_max_combo": None}
