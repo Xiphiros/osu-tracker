@@ -6,10 +6,12 @@ This project follows a modular and maintainable architecture. The backend is dec
 
 ## 1.2. Technology Stack
 
--   **Backend Language:** **Python 3.10+**. It's a high-performance, well-documented language with excellent support for binary data parsing and web frameworks. (Source: User Request)
--   **Backend Framework:** **Flask**. A lightweight and flexible web framework, perfect for creating a simple REST API to serve the score data.
--   **Database:** **SQLite**. A serverless, self-contained SQL database engine. It's ideal for a local application as it doesn't require a separate server process and is stored in a single file.
--   **Frontend:** **HTML, CSS, and vanilla JavaScript (ES6 Modules)**. This provides a simple, universal interface for displaying the data. The frontend is structured modularly to separate concerns. (Source: User Request)
+-   **Backend Language:** **Python 3.10+**.
+-   **Backend Framework:** **Flask**. Used to create the REST API.
+-   **Desktop Windowing:** **pywebview**. Wraps the web-based UI in a native desktop window, creating a standalone application feel.
+-   **Database:** **SQLite**. A serverless, self-contained SQL database engine.
+-   **Frontend:** **HTML, CSS, and vanilla JavaScript (ES6 Modules)**. The UI is built with standard web technologies.
+-   **Bundler:** **PyInstaller**. Used to package the application into a single executable for Windows.
 
 ## 1.3. Project Directory Structure
 
@@ -18,18 +20,38 @@ This project follows a modular and maintainable architecture. The backend is dec
 ├── memory-bank/
 │   └── 01_Architecture_And_Structure.md
 ├── backend/
-│   ├── app.py              # Main Flask application, API endpoints
+│   ├── app.py              # Main Flask application and pywebview entry point
 │   ├── database.py         # Database connection and schema setup
 │   ├── parser.py           # File parsing logic for .osr and .db
 │   └── requirements.txt
 ├── frontend/
-│   ├── assets/             # Global assets (e.g., CSS, images)
-│   │   └── css/
-│   │       └── main.css
-│   ├── components/         # Reusable UI components (e.g., ReplayCard)
-│   ├── services/           # Modules for backend communication (e.g., api.js)
-│   ├── views/              # Main content for different pages/tabs
-│   ├── index.html          # Main HTML application shell
-│   └── main.js             # Application entry point, routing
-└── .env                    # Environment variables (e.g., OSU_FOLDER)
+│   ├── ... (contents unchanged)
+├── .env                    # Environment variables (e.g., OSU_FOLDER)
+├── .gitignore
+└── build.py                # Script to build the executable
 ```
+
+## 1.4. Build & Deployment
+
+To create a standalone executable (`.exe`), this project uses **PyInstaller**. This bundles the entire Python application, including the backend server and all dependencies, into a single file. The `pywebview` library handles the creation of the application window.
+
+### 1.4.1. How to Build
+
+1.  Ensure all dependencies are installed:
+    ```bash
+    pip install -r requirements.txt
+    ```
+2.  Run the build script from the project root:
+    ```bash
+    python build.py
+    ```
+3.  The executable will be created in the `dist/` directory.
+
+### 1.4.2. Running the Application
+
+1.  Place the generated `OsuTracker.exe` in any directory.
+2.  Create a `.env` file in the same directory with the following content, pointing to your osu! installation (use forward slashes):
+    ```
+    OSU_FOLDER="C:/Path/To/Your/osu!"
+    ```
+3.  Run `OsuTracker.exe`. A dedicated application window will open, displaying the user interface. The local database `osu_tracker.db` will be created in this directory.
