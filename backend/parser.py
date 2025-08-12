@@ -55,6 +55,18 @@ def read_string(file):
             return file.read(length).decode('utf-8')
     return ""
 
+def read_windows_ticks(file):
+    """Reads an 8-byte Windows Ticks value and converts it to an ISO string."""
+    ticks = read_long(file)
+    if ticks == 0:
+        return None
+    try:
+        # Convert from 100-nanosecond intervals since 1/1/0001 to a datetime object
+        return (datetime(1, 1, 1) + timedelta(microseconds=ticks / 10)).isoformat()
+    except OverflowError:
+        # The date is invalid or out of the supported range, return None
+        return None
+
 def parse_replay_file(file_path):
     """Parses an .osr replay file and returns a dictionary of its data."""
     with open(file_path, 'rb') as f:
