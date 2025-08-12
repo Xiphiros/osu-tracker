@@ -7,16 +7,20 @@ export function createReplayCard(item) {
     const card = document.createElement('div');
     card.className = 'replay-card';
     const beatmap = item.beatmap || {};
+    const wrapper = document.createElement('div');
+    wrapper.className = 'card-content-wrapper';
 
+    // Apply composite background (gradient + image) to the wrapper element
     if (beatmap.folder_name && beatmap.background_file) {
-        card.style.backgroundImage = `url(${getSongFileUrl(beatmap.folder_name, beatmap.background_file)})`;
+        const imageUrl = getSongFileUrl(beatmap.folder_name, beatmap.background_file);
+        // This CSS sets a dark gradient ON TOP of the background image
+        wrapper.style.background = `linear-gradient(to right, rgba(0,0,0,0.9) 25%, rgba(0,0,0,0.5) 70%, rgba(0,0,0,0.2) 100%), url("${CSS.escape(imageUrl)}")`;
+        wrapper.style.backgroundSize = 'cover';
+        wrapper.style.backgroundPosition = 'center';
     }
 
     const mods = getModsFromInt(item.mods_used);
     const isSilverRank = (item.rank === 'S' || item.rank === 'SS') && (mods.includes('HD') || mods.includes('FL'));
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'card-content-wrapper';
 
     const rankEmblem = document.createElement('div');
     rankEmblem.className = 'card-left';
@@ -25,14 +29,12 @@ export function createReplayCard(item) {
     const right = document.createElement('div');
     right.className = 'card-right';
 
-    // --- BPM Display Logic ---
     const mainBpm = beatmap.bpm ? Math.round(beatmap.bpm) : null;
     const minBpm = beatmap.bpm_min ? Math.round(beatmap.bpm_min) : null;
     const maxBpm = beatmap.bpm_max ? Math.round(beatmap.bpm_max) : null;
 
     let bpmText;
     if (mainBpm) {
-        // If min/max are available and they differ by more than 1, show the range.
         if (minBpm && maxBpm && (maxBpm - minBpm) > 1) {
             bpmText = `${minBpm}-${maxBpm} (${mainBpm})`;
         } else {
