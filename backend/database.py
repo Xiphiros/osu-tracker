@@ -9,11 +9,27 @@ def get_db_connection():
     return conn
 
 def init_db():
-    """Initializes the database and creates the 'replays' table if it doesn't exist."""
+    """Initializes the database, creates tables, and applies schema migrations."""
+    
+    def _migrate_db(conn):
+        """Applies necessary schema migrations to an existing database."""
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(replays)")
+        columns = [row['name'] for row in cursor.fetchall()]
+        
+        if 'bpm_min' not in columns:
+            logging.info("Applying migration: Adding 'bpm_min' to 'replays' table.")
+            cursor.execute("ALTER TABLE replays ADD COLUMN bpm_min REAL")
+        if 'bpm_max' not in columns:
+            logging.info("Applying migration: Adding 'bpm_max' to 'replays' table.")
+            cursor.execute("ALTER TABLE replays ADD COLUMN bpm_max REAL")
+        
+        conn.commit()
+
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Added bpm field
+    # Updated table schema with detailed BPM fields
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS replays (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,13 +52,16 @@ def init_db():
             map_max_combo INTEGER,
             bpm REAL,
             played_at TEXT,
-            parsed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            parsed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            bpm_min REAL,
+            bpm_max REAL
         )
     ''')
     
     conn.commit()
+    _migrate_db(conn)
     conn.close()
-    print("Database initialized successfully.")
+    print("Database initialized and migrated successfully.")
 
 def add_replay(replay_data):
     """Adds a new replay record to the database. Ignores duplicates based on replay_md5."""
