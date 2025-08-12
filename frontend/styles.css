@@ -2,9 +2,9 @@
     --background-color: #1a1a1a;
     --text-color: #e0e0e0;
     --header-bg: #2c2c2c;
-    --table-border: #444;
-    --table-header-bg: #3a3a3a;
-    --table-row-hover: #2f2f2f;
+    --card-bg: #252525;
+    --card-border: #444;
+    --card-overlay: rgba(0, 0, 0, 0.6);
     --accent-color: #00aaff;
     --accent-hover: #0088cc;
 }
@@ -58,31 +58,77 @@ h1 {
     color: #aaa;
 }
 
-table {
-    width: 100%;
-    border-collapse: collapse;
-    background-color: var(--header-bg);
+#replays-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+}
+
+.replay-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 8px;
     overflow: hidden;
+    position: relative;
+    height: 200px;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    color: white;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    transition: transform 0.2s ease-in-out;
 }
 
-th, td {
-    padding: 12px 15px;
-    text-align: left;
-    border-bottom: 1px solid var(--table-border);
+.replay-card:hover {
+    transform: translateY(-5px);
 }
 
-thead th {
-    background-color: var(--table-header-bg);
+.card-overlay {
+    background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.1) 100%);
+    padding: 15px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.card-title {
+    font-size: 1.2em;
+    font-weight: bold;
+    margin: 0 0 5px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-difficulty {
+    font-size: 1em;
+    margin: 0 0 10px 0;
+    color: #ccc;
+}
+
+.card-score {
+    font-size: 1.1em;
+    font-weight: 500;
+    color: var(--accent-color);
+}
+
+.card-judgements {
     font-size: 0.9em;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    color: #bbb;
 }
 
-tbody tr:hover {
-    background-color: var(--table-row-hover);
+.card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-tbody tr:last-child td {
-    border-bottom: none;
+.card-audio-player {
+    height: 30px;
+    opacity: 0.8;
+    max-width: 60%;
+}
+.card-audio-player:hover, .card-audio-player:focus {
+    opacity: 1;
 }
