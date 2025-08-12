@@ -76,6 +76,7 @@ def get_replays():
                 osu_details = parser.parse_osu_file(osu_file_path)
                 enriched_replay['beatmap'].update(osu_details)
 
+        logging.debug(f"Enriched replay data for frontend: {enriched_replay}")
         enriched_replays.append(enriched_replay)
 
     return jsonify(enriched_replays)
