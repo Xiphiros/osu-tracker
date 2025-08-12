@@ -68,7 +68,7 @@ def add_replay(replay_data):
     
     conn.commit()
     conn.close()
-       
+
 def get_all_replays():
     """Retrieves all replay records from the database."""
     conn = get_db_connection()
@@ -92,13 +92,13 @@ if __name__ == '__main__':
     # It sets up the database file and the table.
     init_db()
 
-def update_replay_pp(replay_md5, pp, stars):
-    """Updates the pp and stars for an existing replay record."""
+def update_replay_pp(replay_md5, pp, stars, map_max_combo):
+    """Updates the pp, stars, and map_max_combo for an existing replay record."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "UPDATE replays SET pp = ?, stars = ? WHERE replay_md5 = ?",
-        (pp, stars, replay_md5)
+        "UPDATE replays SET pp = ?, stars = ?, map_max_combo = ? WHERE replay_md5 = ?",
+        (pp, stars, map_max_combo, replay_md5)
     )
     conn.commit()
     conn.close()
