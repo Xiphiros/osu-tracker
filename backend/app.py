@@ -35,6 +35,7 @@ BEATMAP_CACHE = {}
 @app.route('/api/replays', methods=['GET'])
 def get_replays():
     """API endpoint to get all stored replay data, enriched with beatmap details."""
+    player_name = request.args.get('player_name')
     osu_folder = os.getenv('OSU_FOLDER')
     if not osu_folder:
         return jsonify({"error": "OSU_FOLDER path not set"}), 500
@@ -45,7 +46,7 @@ def get_replays():
         ranks = {0:"SS", 1:"S", 2:"SS", 3:"S", 4:"A", 5:"B", 6:"C", 7:"D"}
         return ranks.get(grade_val, "N/A")
 
-    all_replays = database.get_all_replays()
+    all_replays = database.get_all_replays(player_name=player_name)
     enriched_replays = []
     for replay in all_replays:
         beatmap_info = BEATMAP_CACHE.get(replay['beatmap_md5'])
