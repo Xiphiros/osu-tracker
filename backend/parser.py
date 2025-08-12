@@ -87,8 +87,9 @@ def parse_replay_file(file_path):
         replay_data['max_combo'] = read_short(f)
         replay_data['is_perfect_combo'] = read_byte(f) != 0
         replay_data['mods_used'] = read_int(f)
-        read_string(f)
+        read_string(f)  # Life bar graph, not needed for now
         replay_data['played_at'] = read_windows_ticks(f)
+        logging.debug(f"Parsed replay data from {os.path.basename(file_path)}: {replay_data}")
         return replay_data
         
 def parse_osu_db(db_path):
