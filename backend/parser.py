@@ -1,6 +1,7 @@
 import struct
 import lzma
 import logging
+import os
 from datetime import datetime, timedelta
 import rosu_pp_py
 
