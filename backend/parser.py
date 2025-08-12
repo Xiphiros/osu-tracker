@@ -1,6 +1,7 @@
 import struct
 import lzma
 from datetime import datetime, timedelta
+import rosu_pp_py
 
 def read_byte(file):
     """Reads a 1-byte integer from the file."""
@@ -175,3 +176,38 @@ def parse_osu_file(file_path):
     except Exception as e:
         print(f"Warning: Could not parse {file_path}: {e}")
     return data
+
+def calculate_pp(osu_file_path, replay_data):
+    """Calculates PP and star rating for a given play using rosu-pp-py."""
+    try:
+        # rosu-pp-py can handle different game modes
+        mode = rosu_pp_py.GameMode(replay_data.get('game_mode', 0))
+        
+        beatmap = rosu_pp_py.Beatmap(path=osu_file_path)
+        
+        # Calculator for difficulty attributes (stars)
+        diff_calc = rosu_pp_py.Calculator(mode=mode) 
+        diff_attrs = diff_calc.difficulty(beatmap)
+
+        # Calculator for performance attributes (pp)
+        perf_calc = rosu_pp_py.Calculator(
+            mode=mode,
+            n300=replay_data.get('num_300s'),
+            n100=replay_data.get('num_100s'),
+            n50=replay_data.get('num_50s'),
+            n_geki=replay_data.get('num_gekis'),
+            n_katu=replay_data.get('num_katus'),
+            n_misses=replay_data.get('num_misses'),
+            combo=replay_data.get('max_combo')
+        )
+        
+        result = perf_calc.performance(beatmap)
+        
+        return {
+            "pp": result.pp,
+            "stars": diff_attrs.stars
+        }
+    except Exception as e:
+        # Return default values if calculation fails for any reason
+        print(f"Warning: Could not calculate PP for {os_file_path}: {e}")
+        return {"pp": None, "stars": None}
