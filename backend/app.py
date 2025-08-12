@@ -9,8 +9,8 @@ import parser
 # Load environment variables from .env file
 load_dotenv()
 
-# Point Flask to the 'frontend' directory for serving static files
-app = Flask(__name__, static_folder='../frontend')
+# Correctly configure Flask to serve all files from the frontend directory at the root URL
+app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app) # Enable CORS for all routes
 BEATMAP_CACHE = {}
 
@@ -116,6 +116,9 @@ def scan_replays_folder():
     except Exception as e:
         return jsonify({"error": f"An error occurred during scan: {str(e)}"}), 500
 
+# This route now correctly serves index.html for the root path.
+# Other static files (like main.js, main.css) are handled automatically
+# by the static_folder and static_url_path config above.
 @app.route('/')
 def serve_index():
     """Serves the main index.html file from the frontend folder."""
