@@ -9,7 +9,8 @@ import parser
 # Load environment variables from .env file
 load_dotenv()
 
-app = Flask(__name__)
+# Point Flask to the 'frontend' directory for serving static files
+app = Flask(__name__, static_folder='../frontend')
 CORS(app) # Enable CORS for all routes
 BEATMAP_CACHE = {}
 
@@ -68,7 +69,7 @@ def get_players():
     players = database.get_unique_players()
     return jsonify(players)
 
-# New endpoint to serve song files (images, audio)
+# The /api/songs endpoint is now a sub-path of the main app
 @app.route('/api/songs/<path:file_path>')
 def serve_song_file(file_path):
     """API endpoint to serve static files from the osu! Songs directory."""
@@ -102,11 +103,9 @@ def scan_replays_folder():
             file_path = os.path.join(replays_path, file_name)
             try:
                 replay_data = parser.parse_replay_file(file_path)
-                # Ensure replay_data is not empty and has a hash
                 if replay_data and replay_data.get('replay_md5'):
                     database.add_replay(replay_data)
             except Exception as e:
-                # Log errors for individual file parsing but continue the scan
                 print(f"Could not parse file {file_name}: {e}")
         
         return jsonify({
@@ -116,6 +115,11 @@ def scan_replays_folder():
 
     except Exception as e:
         return jsonify({"error": f"An error occurred during scan: {str(e)}"}), 500
+
+@app.route('/')
+def serve_index():
+    """Serves the main index.html file from the frontend folder."""
+    return send_from_directory(app.static_folder, 'index.html')
 
 def load_beatmap_cache():
     """Loads beatmap data from osu!.db into memory."""
@@ -136,9 +140,6 @@ def load_beatmap_cache():
 
 
 if __name__ == '__main__':
-    # Ensure the database is initialized before starting the app
     database.init_db()
-    # Load beatmap data into memory on startup
     load_beatmap_cache()
-    # Run the Flask web server
     app.run(debug=True, port=5000)
