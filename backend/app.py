@@ -55,7 +55,6 @@ def get_replays():
         if beatmap_info:
             enriched_replay['beatmap'] = beatmap_info.copy()
 
-            # Overwrite cached BPM with our accurate, stored values
             if enriched_replay.get('bpm') is not None:
                 enriched_replay['beatmap']['bpm'] = enriched_replay['bpm']
             if enriched_replay.get('bpm_min') is not None:
@@ -77,10 +76,10 @@ def get_replays():
             )
 
             if os.path.exists(osu_file_path):
-                # Parse the .osu file once to get all necessary details
+                logging.debug(f"Processing replay for beatmap: {beatmap_info.get('osu_file_name')}")
                 osu_details = parser.parse_osu_file(osu_file_path)
+                logging.debug(f"Parsed .osu details: {osu_details}")
 
-                # Backfill PP for any scores missing it
                 if enriched_replay.get('pp') is None:
                     pp_info = parser.calculate_pp(osu_file_path, enriched_replay)
                     if pp_info and pp_info.get('pp') is not None:
@@ -89,7 +88,6 @@ def get_replays():
                             enriched_replay['replay_md5'], pp_info['pp'], pp_info['stars'], pp_info['map_max_combo']
                         )
 
-                # Backfill detailed BPM for any scores missing it
                 if enriched_replay['beatmap'].get('bpm_min') is None and osu_details.get('bpm') is not None:
                     database.update_replay_bpm(
                         enriched_replay['replay_md5'],
@@ -98,8 +96,8 @@ def get_replays():
                         osu_details.get('bpm_max')
                     )
                 
-                # Always update the beatmap object for the response with the latest details
                 enriched_replay['beatmap'].update(osu_details)
+                logging.debug(f"Final enriched beatmap object for response: {enriched_replay['beatmap']}")
 
         enriched_replays.append(enriched_replay)
     return jsonify(enriched_replays)
