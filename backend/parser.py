@@ -180,8 +180,15 @@ def parse_osu_file(file_path):
 def calculate_pp(osu_file_path, replay_data):
     """Calculates PP and star rating for a given play using rosu-pp-py."""
     try:
-        # rosu-pp-py can handle different game modes
-        mode = rosu_pp_py.GameMode(replay_data.get('game_mode', 0))
+        # Map integer game mode from replay to rosu_pp_py.GameMode enum
+        game_mode_int = replay_data.get('game_mode', 0)
+        mode_map = {
+            0: rosu_pp_py.GameMode.OSU,
+            1: rosu_pp_py.GameMode.TAIKO,
+            2: rosu_pp_py.GameMode.CATCH,
+            3: rosu_pp_py.GameMode.MANIA,
+        }
+        mode = mode_map.get(game_mode_int, rosu_pp_py.GameMode.OSU)
         
         beatmap = rosu_pp_py.Beatmap(path=osu_file_path)
         
@@ -209,5 +216,5 @@ def calculate_pp(osu_file_path, replay_data):
         }
     except Exception as e:
         # Return default values if calculation fails for any reason
-        print(f"Warning: Could not calculate PP for {os_file_path}: {e}")
+        print(f"Warning: Could not calculate PP for {osu_file_path}: {e}")
         return {"pp": None, "stars": None}
