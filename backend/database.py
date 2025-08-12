@@ -2,6 +2,12 @@ import sqlite3
 
 DATABASE_FILE = 'osu_tracker.db'
 
+def get_db_connection():
+    """Establishes a connection to the SQLite database."""
+    conn = sqlite3.connect(DATABASE_FILE)
+    conn.row_factory = sqlite3.Row  # This allows accessing columns by name
+    return conn
+
 def init_db():
     """Initializes the database and creates the 'replays' table if it doesn't exist."""
     conn = get_db_connection()
