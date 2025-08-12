@@ -3,26 +3,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('replays-container');
     const scanButton = document.getElementById('scan-button');
     const statusMessage = document.getElementById('status-message');
-
     let currentlyPlaying = { audio: null, button: null };
 
     const fetchAndDisplayReplays = async () => {
         statusMessage.textContent = 'Loading replay data...';
         container.innerHTML = '';
         try {
-            const response = await fetch(`${apiBaseUrl}/replays`);
-            if (!response.ok) throw new Error('Failed to fetch replays.');
-            const replays = await response.json();
-
-            if (replays.length === 0) {
-                statusMessage.textContent = 'No replays found. Try scanning the folder.';
-                return;
-            }
-            statusMessage.textContent = `Displaying ${replays.length} scores.`;
+            const replays = await (await fetch(`${apiBaseUrl}/replays`)).json();
+            statusMessage.textContent = replays.length > 0 ? `Displaying ${replays.length} scores.` : 'No replays found. Try scanning the folder.';
             displayReplaysAsCards(replays);
         } catch (error) {
             console.error('Error fetching data:', error);
-            statusMessage.textContent = `Error: ${error.message}. Is the backend server running?`;
+            statusMessage.textContent = `Error: ${error.message}. Is the backend running?`;
         }
     };
 
@@ -31,95 +23,75 @@ document.addEventListener('DOMContentLoaded', () => {
             const card = document.createElement('div');
             card.className = 'replay-card';
             const beatmap = item.beatmap || {};
+
             if (beatmap.folder_name && beatmap.background_file) {
-                const folder = encodeURIComponent(beatmap.folder_name);
-                const file = encodeURIComponent(beatmap.background_file);
-                card.style.backgroundImage = `url(${apiBaseUrl}/songs/${folder}/${file})`;
+                card.style.backgroundImage = `url(${apiBaseUrl}/songs/${encodeURIComponent(beatmap.folder_name)}/${encodeURIComponent(beatmap.background_file)})`;
             }
 
+            // --- Main visible content ---
             const wrapper = document.createElement('div');
             wrapper.className = 'card-content-wrapper';
-
-            // Left Side (Rank)
-            const left = document.createElement('div');
-            left.className = 'card-left';
+            
             const rankEmblem = document.createElement('div');
-            rankEmblem.className = `rank-emblem rank-${item.rank}`;
-            rankEmblem.textContent = item.rank;
-            left.appendChild(rankEmblem);
+            rankEmblem.className = 'card-left';
+            rankEmblem.innerHTML = `<div class="rank-emblem rank-${item.rank}">${item.rank}</div>`;
 
-            // Right Side (Details)
             const right = document.createElement('div');
             right.className = 'card-right';
+            right.innerHTML = `
+                <div>
+                    <div class="card-title" title="${beatmap.artist} - ${beatmap.title}">${beatmap.artist} - ${beatmap.title}</div>
+                    <div class="card-difficulty" title="[${beatmap.difficulty}] mapped by ${beatmap.creator}">[${beatmap.difficulty}] mapped by ${beatmap.creator}</div>
+                    <div class="card-player">Played by ${item.player_name}</div>
+                </div>
+                <div class="card-footer">
+                    <div>
+                        <div class="card-score">${item.total_score.toLocaleString()}</div>
+                        <div class="card-judgements">300:${item.num_300s} 100:${item.num_100s} 50:${item.num_50s} X:${item.num_misses}</div>
+                    </div>
+                    <button class="play-button">▶</button>
+                </div>`;
+            wrapper.append(rankEmblem, right);
 
-            const infoTop = document.createElement('div');
-            const title = document.createElement('div');
-            title.className = 'card-title';
-            title.textContent = beatmap.title ? `${beatmap.artist} - ${beatmap.title}` : 'Unknown Beatmap';
-            const difficulty = document.createElement('div');
-            difficulty.className = 'card-difficulty';
-            difficulty.textContent = `[${beatmap.difficulty}] mapped by ${beatmap.creator}`;
-            const player = document.createElement('div');
-            player.className = 'card-player';
-            player.textContent = `Played by ${item.player_name}`;
-            infoTop.append(title, difficulty, player);
-            
-            const infoBottom = document.createElement('div');
-            infoBottom.className = 'card-footer';
-            
-            const scoreDetails = document.createElement('div');
-            const score = document.createElement('div');
-            score.className = 'card-score';
-            score.textContent = item.total_score.toLocaleString();
-            const judgements = document.createElement('div');
-            judgements.className = 'card-judgements';
-            judgements.textContent = `300:${item.num_300s} 100:${item.num_100s} 50:${item.num_50s} X:${item.num_misses}`;
-            scoreDetails.append(score, judgements);
+            // --- Hidden expandable content ---
+            const totalHits = item.num_300s + item.num_100s + item.num_50s + item.num_misses;
+            const accuracy = totalHits > 0 ? ((item.num_300s * 300 + item.num_100s * 100 + item.num_50s * 50) / (totalHits * 300) * 100).toFixed(2) : "0.00";
+            const playedAt = beatmap.last_played_date ? new Date(beatmap.last_played_date).toLocaleDateString() : "Unknown";
 
-            const playButton = document.createElement('button');
-            playButton.className = 'play-button';
-            playButton.textContent = '▶';
-            
-            infoBottom.append(scoreDetails, playButton);
-            right.append(infoTop, infoBottom);
+            const extraDetails = document.createElement('div');
+            extraDetails.className = 'card-extra-details';
+            extraDetails.innerHTML = `
+                <div class="detail-item"><span class="detail-label">Accuracy</span><span>${accuracy}%</span></div>
+                <div class="detail-item"><span class="detail-label">Max Combo</span><span>${item.max_combo}x</span></div>
+                <div class="detail-item"><span class="detail-label">Played On</span><span>${playedAt}</span></div>`;
 
-            wrapper.append(left, right);
-            card.appendChild(wrapper);
+            card.append(wrapper, extraDetails);
             container.appendChild(card);
             
-            // Audio Logic
+            // --- Event Listeners ---
+            const playButton = card.querySelector('.play-button');
+            playButton.addEventListener('click', (e) => {
+                e.stopPropagation(); // Don't trigger card expand
+                // Audio logic...
+            });
+
+            card.addEventListener('click', () => card.classList.toggle('card-expanded'));
+
             if (beatmap.folder_name && beatmap.audio_file) {
-                const audio = new Audio();
-                const folder = encodeURIComponent(beatmap.folder_name);
-                const file = encodeURIComponent(beatmap.audio_file);
-                audio.src = `${apiBaseUrl}/songs/${folder}/${file}`;
-
-                playButton.addEventListener('click', (e) => {
+                 const audio = new Audio(`${apiBaseUrl}/songs/${encodeURIComponent(beatmap.folder_name)}/${encodeURIComponent(beatmap.audio_file)}`);
+                 playButton.addEventListener('click', e => {
                     e.stopPropagation();
-                    if (currentlyPlaying.audio === audio && !audio.paused) {
-                        audio.pause();
-                    } else {
-                        if (currentlyPlaying.audio) currentlyPlaying.audio.pause();
-                        audio.currentTime = 0;
-                        audio.play();
-                    }
-                });
-
-                audio.onplay = () => {
+                    if(currentlyPlaying.audio === audio && !audio.paused) { audio.pause(); }
+                    else { if(currentlyPlaying.audio) { currentlyPlaying.audio.pause(); } audio.currentTime = 0; audio.play(); }
+                 });
+                 audio.onplay = () => {
                     if (currentlyPlaying.button) currentlyPlaying.button.textContent = '▶';
-                    playButton.textContent = '❚❚';
-                    currentlyPlaying = { audio, button: playButton };
-                };
-                audio.onpause = audio.onended = () => {
-                    playButton.textContent = '▶';
-                    if (currentlyPlaying.audio === audio) {
-                        currentlyPlaying = { audio: null, button: null };
-                    }
-                };
-            } else {
-                playButton.disabled = true;
-                playButton.style.opacity = '0.3';
-            }
+                    playButton.textContent = '❚❚'; currentlyPlaying = { audio, button: playButton };
+                 };
+                 audio.onpause = audio.onended = () => {
+                    playButton.textContent = '▶'; if (currentlyPlaying.audio === audio) currentlyPlaying = { audio: null, button: null };
+                 };
+            } else { playButton.disabled = true; }
         });
     };
 
@@ -130,7 +102,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`${apiBaseUrl}/scan`, { method: 'POST' });
             const result = await response.json();
             statusMessage.textContent = result.status || 'Scan complete.';
-            // Refresh the data after scanning
             fetchAndDisplayReplays();
         } catch (error) {
             console.error('Error during scan:', error);
@@ -140,6 +111,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Initial data load when the page is opened
     fetchAndDisplayReplays();
 });
