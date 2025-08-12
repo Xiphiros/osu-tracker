@@ -131,6 +131,17 @@ def update_replay_pp(replay_md5, pp, stars, map_max_combo):
     conn.commit()
     conn.close()
 
+def update_replay_bpm(replay_md5, bpm, bpm_min, bpm_max):
+    """Updates the detailed BPM info for an existing replay record."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE replays SET bpm = ?, bpm_min = ?, bpm_max = ? WHERE replay_md5 = ?",
+        (bpm, bpm_min, bpm_max, replay_md5)
+    )
+    conn.commit()
+    conn.close()
+
 if __name__ == '__main__':
     # This will run only when you execute `python backend/database.py` directly.
     # It sets up the database file and the table.
