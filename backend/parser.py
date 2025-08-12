@@ -88,7 +88,7 @@ def parse_osu_db(db_path):
             difficulty = read_string(f)
             read_string(f) # audio_file
             md5_hash = read_string(f)
-            read_string(f) # osu_file_name
+            osu_file_name = read_string(f) # Capture the .osu file name
             f.seek(1, 1) # ranked_status
             
             num_hitcircles = read_short(f)
@@ -173,6 +173,7 @@ def parse_osu_db(db_path):
                     "creator": creator,
                     "difficulty": difficulty,
                     "folder_name": folder_name,
+                    "osu_file_name": osu_file_name,
                     "num_hitcircles": num_hitcircles,
                     "num_sliders": num_sliders,
                     "num_spinners": num_spinners,
