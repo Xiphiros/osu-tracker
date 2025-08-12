@@ -2,3 +2,5 @@ Flask
 Flask-Cors
 python-dotenv
 rosu-pp-py
+pyinstaller
+waitress
