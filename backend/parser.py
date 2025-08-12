@@ -182,25 +182,59 @@ def parse_osu_db(db_path):
 
 def parse_osu_file(file_path):
     """
-    Parses a .osu file to find the audio and background filenames.
+    Parses a .osu file to find audio/background filenames and min/max BPM.
     Note: This is a simplified parser and might not cover all edge cases.
     """
-    data = {"audio_file": None, "background_file": None}
+    data = {
+        "audio_file": None, 
+        "background_file": None,
+        "bpm_min": None,
+        "bpm_max": None
+    }
+    timing_bpms = []
+    
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            in_events_section = False
+            current_section = ""
             for line in f:
                 line = line.strip()
-                if line.startswith("AudioFilename:"):
-                    data["audio_file"] = line.split(":", 1)[1].strip()
-                if line == "[Events]":
-                    in_events_section = True
+                if not line or line.startswith("//"):
                     continue
-                if in_events_section and (line.startswith("0,0,") or line.startswith("Image,")):
+                
+                if line.startswith('['):
+                    current_section = line
+                    continue
+
+                if current_section == "[General]":
+                    if line.startswith("AudioFilename:"):
+                        data["audio_file"] = line.split(":", 1)[1].strip()
+                
+                elif current_section == "[Events]":
+                    # [cite_start]Find the first background image entry [cite: 71, 76]
+                    if data.get("background_file") is None and (line.startswith("0,0,") or line.startswith("Image,")):
+                        parts = line.split(',')
+                        if len(parts) >= 3:
+                            data["background_file"] = parts[2].strip().strip('"')
+
+                elif current_section == "[TimingPoints]":
                     parts = line.split(',')
-                    if len(parts) >= 3:
-                        data["background_file"] = parts[2].strip('"')
-                        break
+                    if len(parts) < 8:
+                        continue
+                    
+                    # [cite_start]An uninherited timing point defines a new BPM [cite: 110]
+                    is_uninherited = parts[6].strip() == '1'
+                    if is_uninherited:
+                        # [cite_start]beatLength is the duration of a beat in milliseconds [cite: 103]
+                        beat_length = float(parts[1].strip())
+                        if beat_length > 0:
+                            # [cite_start]Formula to convert beat length to BPM [cite: 126]
+                            bpm = 60000.0 / beat_length
+                            timing_bpms.append(bpm)
+        
+        if timing_bpms:
+            data['bpm_min'] = min(timing_bpms)
+            data['bpm_max'] = max(timing_bpms)
+
     except Exception as e:
         print(f"Warning: Could not parse {file_path}: {e}")
     return data
