@@ -2,9 +2,6 @@ import struct
 import lzma
 from datetime import datetime
 
-# Based on the data type specification from the provided osu! documentation.
-# Source: osr_reference.pdf & db_reference.pdf
-
 def read_byte(file):
     """Reads a 1-byte integer from the file."""
     return struct.unpack('<B', file.read(1))[0]
@@ -20,6 +17,14 @@ def read_int(file):
 def read_long(file):
     """Reads an 8-byte little-endian integer from the file."""
     return struct.unpack('<Q', file.read(8))[0]
+    
+def read_float(file):
+    """Reads a 4-byte single-precision float from the file."""
+    return struct.unpack('<f', file.read(4))[0]
+
+def read_double(file):
+    """Reads an 8-byte double-precision float from the file."""
+    return struct.unpack('<d', file.read(8))[0]
 
 def read_uleb128(file):
     """Reads a ULEB128-encoded integer from the file."""
@@ -34,11 +39,7 @@ def read_uleb128(file):
     return result
 
 def read_string(file):
-    """
-    Reads a string from the file.
-    Format is a single byte (0x00 or 0x0b), then ULEB128 for length, then UTF-8 string.
-    (Source: osr_reference.pdf, "String" data type) [cite: 87, 88]
-    """
+    """Reads a string from the file based on the osu! string format."""
     if read_byte(file) == 0x0b:
         length = read_uleb128(file)
         if length > 0:
@@ -46,10 +47,7 @@ def read_string(file):
     return ""
 
 def parse_replay_file(file_path):
-    """
-    Parses an .osr replay file and returns a dictionary of its data.
-    This function reads data fields in the order specified by osr_reference.pdf.
-    """
+    """Parses an .osr replay file and returns a dictionary of its data."""
     with open(file_path, 'rb') as f:
         replay_data = {}
         replay_data['game_mode'] = read_byte(f)
@@ -67,103 +65,122 @@ def parse_replay_file(file_path):
         return replay_data
 
 def parse_osu_db(db_path):
-    """
-    Parses the osu!.db file and returns a dictionary of beatmaps keyed by MD5 hash.
-    (Source: db_reference.pdf)
-    """
+    """Parses the osu!.db file and returns a dictionary of beatmaps keyed by MD5 hash."""
     beatmaps = {}
     with open(db_path, 'rb') as f:
-        version = read_int(f) # osu! version [cite: 42]
-        read_int(f) # Folder count [cite: 42]
-        read_byte(f) # Account unlocked [cite: 42]
-        read_long(f) # Date account will be unlocked [cite: 42]
-        read_string(f) # Player name [cite: 42]
-        num_beatmaps = read_int(f) # Number of beatmaps [cite: 42]
+        version = read_int(f)
+        f.seek(4, 1) # folder_count
+        f.seek(1, 1) # account_unlocked
+        f.seek(8, 1) # unlock_date
+        read_string(f) # player_name
+        num_beatmaps = read_int(f)
 
         for _ in range(num_beatmaps):
-            # The beatmap entry size is only present in older versions [cite: 48]
+            # The beatmap entry size is only present in older versions
             if version < 20191106:
-                entry_size = read_int(f)
+                read_int(f)
 
             artist = read_string(f)
-            # Skip unicode artist name, not needed for this app
-            read_string(f)
+            read_string(f) # artist_unicode
             title = read_string(f)
-            # Skip unicode song title
-            read_string(f)
+            read_string(f) # title_unicode
             creator = read_string(f)
             difficulty = read_string(f)
-            read_string(f) # Audio file name
+            read_string(f) # audio_file
             md5_hash = read_string(f)
-            read_string(f) # osu file name
-
-            # We only need the string data for now, so we can skip the numeric fields.
-            # This requires careful seeking based on the documented structure.
-            # For simplicity in this step, we will read them but discard them.
-            f.seek(1, 1) # Ranked status
-            f.seek(2, 1) # Hitcircles
-            f.seek(2, 1) # Sliders
-            f.seek(2, 1) # Spinners
-            f.seek(8, 1) # Last modification time
-
-            # Difficulty settings vary by version
-            if version < 20140609:
-                f.seek(4 * 1, 1) # AR, CS, HP, OD as Bytes
-            else:
-                f.seek(4 * 4, 1) # AR, CS, HP, OD as Singles
+            read_string(f) # osu_file_name
+            f.seek(1, 1) # ranked_status
             
-            f.seek(8, 1) # Slider velocity
+            num_hitcircles = read_short(f)
+            num_sliders = read_short(f)
+            num_spinners = read_short(f)
+            
+            f.seek(8, 1) # last_mod_time
+
+            # Difficulty stats data type varies by version
+            if version < 20140609:
+                ar = float(read_byte(f))
+                cs = float(read_byte(f))
+                hp = float(read_byte(f))
+                od = float(read_byte(f))
+            else:
+                ar = read_float(f)
+                cs = read_float(f)
+                hp = read_float(f)
+                od = read_float(f)
+            
+            f.seek(8, 1) # slider_velocity
 
             # Star rating pairs vary by version
             if version >= 20140609:
                 for _ in range(4): # For each game mode
                     num_pairs = read_int(f)
-                    # Data type for pairs depends on version [cite: 52]
                     pair_size = 14 if version < 20250107 else 10 
                     f.seek(num_pairs * pair_size, 1)
 
-            f.seek(4, 1) # Drain time
-            f.seek(4, 1) # Total time
-            f.seek(4, 1) # Preview time
+            f.seek(4, 1) # drain_time
+            f.seek(4, 1) # total_time
+            f.seek(4, 1) # preview_time
 
             num_timing_points = read_int(f)
-            f.seek(num_timing_points * 17, 1) # Seek past timing points
+            bpm = 0.0
+            for i in range(num_timing_points):
+                tp_bpm = read_double(f)
+                read_double(f) # offset
+                tp_inherited = read_byte(f)
+                # Found the first non-inherited timing point, which dictates the main BPM
+                if not tp_inherited: 
+                    if tp_bpm > 0:
+                        bpm = 60000.0 / tp_bpm
+                    # Seek past remaining points and break
+                    f.seek((num_timing_points - 1 - i) * 17, 1)
+                    break
+                elif i == 0: # Fallback to first timing point if all are inherited
+                    if tp_bpm > 0:
+                        bpm = 60000.0 / tp_bpm
 
-            f.seek(4, 1) # Difficulty ID
-            f.seek(4, 1) # Beatmap ID
-            f.seek(4, 1) # Thread ID
-            f.seek(4 * 1, 1) # Grade achieved per mode
-            f.seek(2, 1) # Local offset
-            f.seek(4, 1) # Stack leniency
-            f.seek(1, 1) # Gameplay mode
+            f.seek(4, 1) # difficulty_id
+            f.seek(4, 1) # beatmap_id
+            f.seek(4, 1) # thread_id
+            f.seek(4, 1) # grade_achieved
+            f.seek(2, 1) # local_offset
+            f.seek(4, 1) # stack_leniency
+            f.seek(1, 1) # gameplay_mode
 
-            read_string(f) # Song source
-            read_string(f) # Song tags
-            f.seek(2, 1) # Online offset
-            read_string(f) # Font
-            f.seek(1, 1) # Is unplayed
-            f.seek(8, 1) # Last time played
-            f.seek(1, 1) # Is osz2
+            read_string(f) # song_source
+            read_string(f) # song_tags
+            f.seek(2, 1) # online_offset
+            read_string(f) # font
+            f.seek(1, 1) # is_unplayed
+            f.seek(8, 1) # last_time_played
+            f.seek(1, 1) # is_osz2
             
-            folder_name = read_string(f) # Beatmap folder name [cite: 58]
+            folder_name = read_string(f)
             
-            f.seek(8, 1) # Last time checked
-            f.seek(5 * 1, 1) # Ignore flags
+            f.seek(8, 1) # last_time_checked
+            f.seek(5, 1) # ignore_flags
             
-            # Unknown short only present in older versions [cite: 58]
             if version < 20140609:
                 f.seek(2, 1)
 
-            f.seek(4, 1) # Last modification time
-            f.seek(1, 1) # Mania scroll speed
+            f.seek(4, 1) # last_modification_time
+            f.seek(1, 1) # mania_scroll_speed
 
-            # Store the essential data in our dictionary
             if md5_hash:
                 beatmaps[md5_hash] = {
                     "artist": artist,
                     "title": title,
                     "creator": creator,
                     "difficulty": difficulty,
-                    "folder_name": folder_name
+                    "folder_name": folder_name,
+                    "num_hitcircles": num_hitcircles,
+                    "num_sliders": num_sliders,
+                    "num_spinners": num_spinners,
+                    "total_objects": num_hitcircles + num_sliders + num_spinners,
+                    "ar": round(ar, 2),
+                    "cs": round(cs, 2),
+                    "hp": round(hp, 2),
+                    "od": round(od, 2),
+                    "bpm": round(bpm, 2)
                 }
     return beatmaps
