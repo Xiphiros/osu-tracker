@@ -46,8 +46,11 @@ export function createReplayCard(item) {
     extraDetails.className = 'card-extra-details';
     extraDetails.innerHTML = `
         <div class="detail-item"><span class="detail-label">Accuracy</span><span>${accuracy}%</span></div>
+        <div class="detail-item"><span class="detail-label">Performance</span><span>${item.pp ? item.pp.toFixed(2) + 'pp' : 'N/A'}</span></div>
+        <div class="detail-item"><span class="detail-label">Star Rating</span><span>${item.stars ? '★ ' + item.stars.toFixed(2) : 'N/A'}</span></div>
         <div class="detail-item"><span class="detail-label">Max Combo</span><span>${item.max_combo || 0}x</span></div>
-        <div class="detail-item"><span class="detail-label">Played On</span><span>${playedAt}</span></div>`;
+        <div class="detail-item"><span class="detail-label">Played On</span><span>${playedAt}</span></div>
+    `;
 
     card.append(wrapper, extraDetails);
 
