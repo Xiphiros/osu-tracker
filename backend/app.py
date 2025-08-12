@@ -83,6 +83,36 @@ def get_players():
     players = database.get_unique_players()
     return jsonify(players)
 
+@app.route('/api/players/<player_name>/stats', methods=['GET'])
+def get_player_stats(player_name):
+    """Calculates and returns key statistics for a given player."""
+    replays = database.get_all_replays(player_name=player_name)
+    if not replays:
+        return jsonify({
+            "total_pp": 0,
+            "play_count": 0,
+            "top_play_pp": 0
+        })
+
+    # Filter out plays without valid PP for this calculation
+    pp_plays = [r for r in replays if r.get('pp') is not None and r.get('pp') > 0]
+    
+    # Sort plays by PP descending to calculate weighted total
+    pp_plays.sort(key=lambda r: r['pp'], reverse=True)
+
+    total_pp = 0
+    for i, replay in enumerate(pp_plays):
+        total_pp += replay['pp'] * (0.95 ** i)
+        
+    top_play_pp = pp_plays[0]['pp'] if pp_plays else 0
+
+    stats = {
+        "total_pp": round(total_pp, 2),
+        "play_count": len(replays),
+        "top_play_pp": round(top_play_pp, 2)
+    }
+    return jsonify(stats)
+
 @app.route('/api/songs/<path:file_path>')
 def serve_song_file(file_path):
     osu_folder = os.getenv('OSU_FOLDER')
