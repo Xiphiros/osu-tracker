@@ -71,10 +71,11 @@ def parse_replay_file(file_path):
         replay_data['num_katus'] = read_short(f)
         replay_data['num_misses'] = read_short(f)
         replay_data['total_score'] = read_int(f)
-        # Note: The provided .osr reference is incomplete. Max combo follows total score.
         replay_data['max_combo'] = read_short(f)
+        read_byte(f) # perfect_combo (1 byte)
+        replay_data['played_at'] = read_windows_ticks(f) # Timestamp
         return replay_data
-
+        
 def parse_osu_db(db_path):
     """Parses the osu!.db file and returns a dictionary of beatmaps keyed by MD5 hash."""
     beatmaps = {}
