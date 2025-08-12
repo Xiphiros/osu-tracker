@@ -18,3 +18,8 @@ osu_tracker.db
 # IDE / Editor specific
 .vscode/
 .idea/
+
+# PyInstaller artifacts
+dist/
+build/
+*.spec
