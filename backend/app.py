@@ -128,6 +128,7 @@ def scan_replays_folder():
                 # Prepare for PP calculation
                 replay_data['pp'] = None
                 replay_data['stars'] = None
+                replay_data['map_max_combo'] = None
 
                 beatmap_info = BEATMAP_CACHE.get(replay_data['beatmap_md5'])
                 if beatmap_info:
@@ -140,9 +141,10 @@ def scan_replays_folder():
                         pp_info = parser.calculate_pp(osu_file_path, replay_data)
                         replay_data.update(pp_info)
                 
+                logging.debug(f"Data for DB insert: {replay_data}")
                 database.add_replay(replay_data)
             except Exception as e:
-                print(f"Could not parse file {file_name}: {e}")
+                logging.error(f"Could not process file {file_name}: {e}", exc_info=True)
         
         return jsonify({
             "status": "Scan complete",
@@ -150,7 +152,9 @@ def scan_replays_folder():
         })
 
     except Exception as e:
+        logging.error(f"An error occurred during scan: {str(e)}", exc_info=True)
         return jsonify({"error": f"An error occurred during scan: {str(e)}"}), 500
+    
 # This route now correctly serves index.html for the root path.
 # Other static files (like main.js, main.css) are handled automatically
 # by the static_folder and static_url_path config above.
