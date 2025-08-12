@@ -55,6 +55,18 @@ def get_replays():
                 beatmap_info['folder_name'], 
                 beatmap_info['osu_file_name']
             )
+
+            # Lazy-calculate PP for older records that don't have it
+            if enriched_replay.get('pp') is None and os.path.exists(osu_file_path):
+                pp_info = parser.calculate_pp(osu_file_path, enriched_replay)
+                if pp_info and pp_info.get('pp') is not None:
+                    enriched_replay.update(pp_info)
+                    database.update_replay_pp(
+                        enriched_replay['replay_md5'],
+                        pp_info['pp'],
+                        pp_info['stars']
+                    )
+
             if os.path.normpath(osu_file_path).startswith(os.path.normpath(songs_path)):
                 osu_details = parser.parse_osu_file(osu_file_path)
                 enriched_replay['beatmap'].update(osu_details)
