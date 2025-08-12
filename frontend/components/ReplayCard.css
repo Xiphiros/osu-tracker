@@ -30,17 +30,16 @@
 }
 
 .card-content-wrapper {
-    /* This is now a flex-item, not an absolute overlay */
     display: flex;
     padding: 15px;
     box-sizing: border-box;
-    flex-shrink: 0; /* Prevent wrapper from shrinking */
+    flex-shrink: 0;
 
     /* The gradient provides the overlay on the parent's background image */
     background: linear-gradient(to right, rgba(0,0,0,0.90) 25%, rgba(0,0,0,0.5) 70%, rgba(0,0,0,0.2) 100%);
     
-    /* Ensure this section always fills the collapsed card view */
-    min-height: 135px;
+    /* Allow this section to grow and fill the card's expanded space */
+    flex-grow: 1; 
 }
 
 .card-left {
