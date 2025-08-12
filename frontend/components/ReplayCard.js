@@ -40,7 +40,7 @@ export function createReplayCard(item) {
 
     const totalHits = item.num_300s + item.num_100s + item.num_50s + item.num_misses;
     const accuracy = totalHits > 0 ? ((item.num_300s * 300 + item.num_100s * 100 + item.num_50s * 50) / (totalHits * 300) * 100).toFixed(2) : "0.00";
-    const playedAt = beatmap.last_played_date ? new Date(beatmap.last_played_date).toLocaleDateString() : "Unknown";
+    const playedAt = item.played_at ? new Date(item.played_at).toLocaleDateString() : "Unknown";
 
     const extraDetails = document.createElement('div');
     extraDetails.className = 'card-extra-details';
@@ -48,7 +48,7 @@ export function createReplayCard(item) {
         <div class="detail-item"><span class="detail-label">Accuracy</span><span>${accuracy}%</span></div>
         <div class="detail-item"><span class="detail-label">Performance</span><span>${item.pp ? item.pp.toFixed(2) + 'pp' : 'N/A'}</span></div>
         <div class="detail-item"><span class="detail-label">Star Rating</span><span>${item.stars ? '★ ' + item.stars.toFixed(2) : 'N/A'}</span></div>
-        <div class="detail-item"><span class="detail-label">Max Combo</span><span>${item.max_combo || 0}x</span></div>
+        <div class="detail-item"><span class="detail-label">Max Combo</span><span>${item.max_combo || 0}x / ${item.map_max_combo || '?'}x</span></div>
         <div class="detail-item"><span class="detail-label">Played On</span><span>${playedAt}</span></div>
     `;
 
