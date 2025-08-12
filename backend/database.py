@@ -13,7 +13,7 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Added pp and stars fields to the schema
+    # Added pp, stars, map_max_combo, and played_at fields
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS replays (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,6 +32,8 @@ def init_db():
             max_combo INTEGER,
             pp REAL,
             stars REAL,
+            map_max_combo INTEGER,
+            played_at TEXT,
             parsed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -39,7 +41,7 @@ def init_db():
     conn.commit()
     conn.close()
     print("Database initialized successfully.")
-
+    
 def add_replay(replay_data):
     """Adds a new replay record to the database. Ignores duplicates based on replay_md5."""
     conn = get_db_connection()
