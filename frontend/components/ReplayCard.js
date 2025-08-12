@@ -7,20 +7,19 @@ export function createReplayCard(item) {
     const card = document.createElement('div');
     card.className = 'replay-card';
     const beatmap = item.beatmap || {};
-    const wrapper = document.createElement('div');
-    wrapper.className = 'card-content-wrapper';
 
-    // Apply composite background (gradient + image) to the wrapper element
+    // Revert to setting the background on the main card element.
+    // The CSS pseudo-element will handle the gradient overlay.
     if (beatmap.folder_name && beatmap.background_file) {
         const imageUrl = getSongFileUrl(beatmap.folder_name, beatmap.background_file);
-        // This CSS sets a dark gradient ON TOP of the background image
-        wrapper.style.background = `linear-gradient(to right, rgba(0,0,0,0.9) 25%, rgba(0,0,0,0.5) 70%, rgba(0,0,0,0.2) 100%), url("${CSS.escape(imageUrl)}")`;
-        wrapper.style.backgroundSize = 'cover';
-        wrapper.style.backgroundPosition = 'center';
+        card.style.backgroundImage = `url("${CSS.escape(imageUrl)}")`;
     }
 
     const mods = getModsFromInt(item.mods_used);
     const isSilverRank = (item.rank === 'S' || item.rank === 'SS') && (mods.includes('HD') || mods.includes('FL'));
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'card-content-wrapper';
 
     const rankEmblem = document.createElement('div');
     rankEmblem.className = 'card-left';
