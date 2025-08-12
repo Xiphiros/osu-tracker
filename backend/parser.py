@@ -141,12 +141,17 @@ def parse_osu_db(db_path):
             num_timing_points = read_int(f)
             bpm = 0.0
             found_bpm = False
-            for i in range(num_timing_points):
-                tp_bpm = read_double(f)
-                read_double(f) # offset
-                tp_inherited = read_byte(f) != 0
-                if not found_bpm and not tp_inherited and tp_bpm > 0:
-                    bpm = 60000.0 / tp_bpm
+            # We must iterate through all timing points to advance the file cursor correctly.
+            for _ in range(num_timing_points):
+                beat_length = read_double(f)
+                read_double(f)  # offset
+                # The boolean is non-zero (true) for uninherited timing points.
+                is_uninherited = read_byte(f) != 0
+
+                # The first uninherited point defines the BPM. Its beat_length is a positive
+                # value representing milliseconds per beat. Inherited points have a negative value.
+                if not found_bpm and is_uninherited and beat_length > 0:
+                    bpm = 60000.0 / beat_length
                     found_bpm = True
             
             f.seek(12, 1) # difficulty_id, beatmap_id, thread_id
