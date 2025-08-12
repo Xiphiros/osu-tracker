@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>osu! Local Score Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>osu! Local Score Tracker</h1>
+        <div class="controls">
+            <button id="scan-button">Scan for New Replays</button>
+            <p id="status-message"></p>
+        </div>
+    </header>
+    <main>
+        <table id="replays-table">
+            <thead>
+                <tr>
+                    <th>Beatmap</th>
+                    <th>Difficulty</th>
+                    <th>Score</th>
+                    <th>Judgements (300/100/50/Miss)</th>
+                    <th>Player</th>
+                    <th>Difficulty Stats (AR/OD/CS/HP)</th>
+                    <th>BPM</th>
+                </tr>
+            </thead>
+            <tbody id="replays-tbody">
+                </tbody>
+        </table>
+    </main>
+    <script src="script.js"></script>
+</body>
+</html>
