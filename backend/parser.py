@@ -130,19 +130,24 @@ def parse_osu_db(db_path):
             
             f.seek(8, 1) # slider_velocity
             if version >= 20140609:
-                for _ in range(4):
+                for _ in range(4): # Star rating difficulties for different modes
                     num_pairs = read_int(f)
-                    f.seek(num_pairs * (14 if version < 20250107 else 10), 1)
+                    # Skip the pairs data
+                    f.seek(num_pairs * 14, 1)
+
 
             f.seek(12, 1) # drain_time, total_time, preview_time
+            
             num_timing_points = read_int(f)
             bpm = 0.0
+            found_bpm = False
             for i in range(num_timing_points):
-                tp_bpm, _, tp_inherited = read_double(f), read_double(f), read_byte(f)
-                if not tp_inherited and tp_bpm > 0:
+                tp_bpm = read_double(f)
+                read_double(f) # offset
+                tp_inherited = read_byte(f) != 0
+                if not found_bpm and not tp_inherited and tp_bpm > 0:
                     bpm = 60000.0 / tp_bpm
-                    f.seek((num_timing_points - 1 - i) * 17, 1)
-                    break
+                    found_bpm = True
             
             f.seek(12, 1) # difficulty_id, beatmap_id, thread_id
             grades = {"osu": read_byte(f), "taiko": read_byte(f), "ctb": read_byte(f), "mania": read_byte(f)}
