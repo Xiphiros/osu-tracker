@@ -13,8 +13,7 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # The schema is based on the parsed data from parser.py
-    # We add a UNIQUE constraint on replay_md5 to prevent duplicate entries.
+    # Added max_combo field to the schema
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS replays (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,6 +29,7 @@ def init_db():
             num_katus INTEGER,
             num_misses INTEGER,
             total_score INTEGER,
+            max_combo INTEGER,
             parsed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -47,20 +47,21 @@ def add_replay(replay_data):
     cursor.execute('''
         INSERT OR IGNORE INTO replays (
             game_mode, game_version, beatmap_md5, player_name, replay_md5,
-            num_300s, num_100s, num_50s, num_gekis, num_katus, num_misses, total_score
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            num_300s, num_100s, num_50s, num_gekis, num_katus, num_misses, total_score, max_combo
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         replay_data.get('game_mode'), replay_data.get('game_version'),
         replay_data.get('beatmap_md5'), replay_data.get('player_name'),
         replay_data.get('replay_md5'), replay_data.get('num_300s'),
         replay_data.get('num_100s'), replay_data.get('num_50s'),
         replay_data.get('num_gekis'), replay_data.get('num_katus'),
-        replay_data.get('num_misses'), replay_data.get('total_score')
+        replay_data.get('num_misses'), replay_data.get('total_score'),
+        replay_data.get('max_combo')
     ))
     
     conn.commit()
     conn.close()
-
+    
 def get_all_replays():
     """Retrieves all replay records from the database."""
     conn = get_db_connection()
