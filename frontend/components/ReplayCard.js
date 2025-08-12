@@ -29,6 +29,10 @@ export function createReplayCard(item) {
             <div class="card-title" title="${beatmap.artist} - ${beatmap.title}">${beatmap.artist || 'Unknown Artist'} - ${beatmap.title || 'Unknown Title'}</div>
             <div class="card-difficulty" title="[${beatmap.difficulty}] mapped by ${beatmap.creator}">[${beatmap.difficulty || '?'}] mapped by ${beatmap.creator || 'Unknown Mapper'}</div>
             <div class="card-player">Played by ${item.player_name || 'Unknown Player'}</div>
+            <div class="card-stats">
+                <span class="stat-stars">★ ${item.stars ? item.stars.toFixed(2) : 'N/A'}</span>
+                <span class="stat-bpm">♫ ${beatmap.bpm ? Math.round(beatmap.bpm) : 'N/A'} BPM</span>
+            </div>
         </div>
         <div class="card-footer">
             <div>
@@ -53,10 +57,8 @@ export function createReplayCard(item) {
         });
     }
 
-    // Add mods container to footer controls
     const footerControls = right.querySelector('.footer-controls');
     footerControls.prepend(modsContainer);
-
 
     const totalHits = item.num_300s + item.num_100s + item.num_50s + item.num_misses;
     const accuracy = totalHits > 0 ? ((item.num_300s * 300 + item.num_100s * 100 + item.num_50s * 50) / (totalHits * 300) * 100).toFixed(2) : "0.00";
