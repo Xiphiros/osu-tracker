@@ -22,29 +22,41 @@ def get_replays():
 
     songs_path = os.path.join(osu_folder, 'Songs')
     
+    # Helper function for grade mapping
+    def get_rank(grade_val):
+        # Based on osu! wiki, but simplified. 0/1 are for silver SS/S with mods.
+        ranks = {0:"SS", 1:"S", 2:"SS", 3:"S", 4:"A", 5:"B", 6:"C", 7:"D"}
+        return ranks.get(grade_val, "N/A")
+
     all_replays = database.get_all_replays()
     enriched_replays = []
 
     for replay in all_replays:
         beatmap_info = BEATMAP_CACHE.get(replay['beatmap_md5'])
-        enriched_replay = dict(replay) # Start with basic replay data
+        enriched_replay = dict(replay)
 
         if beatmap_info:
             enriched_replay['beatmap'] = beatmap_info
             
-            # Construct path and parse the .osu file for more details
+            # Determine rank based on game mode
+            game_mode = enriched_replay.get('game_mode')
+            grades = beatmap_info.get('grades', {})
+            grade_val = -1
+            if game_mode == 0: grade_val = grades.get('osu')
+            elif game_mode == 1: grade_val = grades.get('taiko')
+            elif game_mode == 2: grade_val = grades.get('ctb')
+            elif game_mode == 3: grade_val = grades.get('mania')
+            enriched_replay['rank'] = get_rank(grade_val)
+            
+            # Parse .osu file for more details
             osu_file_path = os.path.join(
                 songs_path, 
                 beatmap_info['folder_name'], 
                 beatmap_info['osu_file_name']
             )
-
-            # Sanity check path to prevent path traversal issues
             if os.path.normpath(osu_file_path).startswith(os.path.normpath(songs_path)):
                 osu_details = parser.parse_osu_file(osu_file_path)
                 enriched_replay['beatmap'].update(osu_details)
-            else:
-                print(f"Warning: Skipped suspicious path: {osu_file_path}")
 
         enriched_replays.append(enriched_replay)
 
