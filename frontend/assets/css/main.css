@@ -150,3 +150,25 @@ main#main-content {
     grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
     gap: 20px;
 }
+
+.profile-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    padding: 15px;
+    margin: 20px 0;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+.profile-filters > * {
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background-color: #333;
+    color: var(--text-color);
+    font-size: 0.9em;
+}
+.profile-filters input::placeholder {
+    color: #999;
+}
