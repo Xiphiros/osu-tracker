@@ -132,7 +132,7 @@ def parse_osu_db(db_path):
             difficulty = read_string(f)
             read_string(f) # audio_file
             md5_hash = read_string(f)
-            osu_file_name = read_string(f) # Capture the .osu file name
+            osu_file_name = read_string(f)
             f.seek(1, 1) # ranked_status
             
             num_hitcircles = read_short(f)
@@ -172,21 +172,27 @@ def parse_osu_db(db_path):
                 tp_bpm = read_double(f)
                 read_double(f) # offset
                 tp_inherited = read_byte(f)
-                # Found the first non-inherited timing point, which dictates the main BPM
                 if not tp_inherited: 
                     if tp_bpm > 0:
                         bpm = 60000.0 / tp_bpm
-                    # Seek past remaining points and break
                     f.seek((num_timing_points - 1 - i) * 17, 1)
                     break
-                elif i == 0: # Fallback to first timing point if all are inherited
+                elif i == 0:
                     if tp_bpm > 0:
                         bpm = 60000.0 / tp_bpm
 
             f.seek(4, 1) # difficulty_id
             f.seek(4, 1) # beatmap_id
             f.seek(4, 1) # thread_id
-            f.seek(4, 1) # grade_achieved
+            
+            # Read the grades for each mode
+            grades = {
+                "osu": read_byte(f),
+                "taiko": read_byte(f),
+                "ctb": read_byte(f),
+                "mania": read_byte(f)
+            }
+
             f.seek(2, 1) # local_offset
             f.seek(4, 1) # stack_leniency
             f.seek(1, 1) # gameplay_mode
@@ -218,6 +224,7 @@ def parse_osu_db(db_path):
                     "difficulty": difficulty,
                     "folder_name": folder_name,
                     "osu_file_name": osu_file_name,
+                    "grades": grades,
                     "num_hitcircles": num_hitcircles,
                     "num_sliders": num_sliders,
                     "num_spinners": num_spinners,
