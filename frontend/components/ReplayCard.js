@@ -44,13 +44,25 @@ export function createReplayCard(item) {
 
     const extraDetails = document.createElement('div');
     extraDetails.className = 'card-extra-details';
-    extraDetails.innerHTML = `
-        <div class="detail-item"><span class="detail-label">Accuracy</span><span>${accuracy}%</span></div>
-        <div class="detail-item"><span class="detail-label">Performance</span><span>${item.pp ? item.pp.toFixed(2) + 'pp' : 'N/A'}</span></div>
-        <div class="detail-item"><span class="detail-label">Star Rating</span><span>${item.stars ? '★ ' + item.stars.toFixed(2) : 'N/A'}</span></div>
-        <div class="detail-item"><span class="detail-label">Max Combo</span><span>${item.max_combo || 0}x / ${item.map_max_combo || '?'}x</span></div>
-        <div class="detail-item"><span class="detail-label">Played On</span><span>${playedAt}</span></div>
-    `;
+
+    // Helper function to create each detail item robustly
+    const createDetailItem = (label, value) => {
+        const item = document.createElement('div');
+        item.className = 'detail-item';
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'detail-label';
+        labelSpan.textContent = label;
+        const valueSpan = document.createElement('span');
+        valueSpan.textContent = value;
+        item.append(labelSpan, valueSpan);
+        return item;
+    };
+
+    extraDetails.appendChild(createDetailItem('Accuracy', `${accuracy}%`));
+    extraDetails.appendChild(createDetailItem('Performance', item.pp ? `${item.pp.toFixed(2)}pp` : 'N/A'));
+    extraDetails.appendChild(createDetailItem('Star Rating', item.stars ? `★ ${item.stars.toFixed(2)}` : 'N/A'));
+    extraDetails.appendChild(createDetailItem('Max Combo', `${item.max_combo || 0}x / ${item.map_max_combo || '?'}x`));
+    extraDetails.appendChild(createDetailItem('Played On', playedAt));
 
     card.append(wrapper, extraDetails);
 
