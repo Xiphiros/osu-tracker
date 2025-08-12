@@ -62,6 +62,12 @@ def get_replays():
 
     return jsonify(enriched_replays)
 
+@app.route('/api/players', methods=['GET'])
+def get_players():
+    """API endpoint to get a list of unique players."""
+    players = database.get_unique_players()
+    return jsonify(players)
+
 # New endpoint to serve song files (images, audio)
 @app.route('/api/songs/<path:file_path>')
 def serve_song_file(file_path):
