@@ -1,10 +1,14 @@
 import os
+import logging
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 
 import database
 import parser
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load environment variables from .env file
 load_dotenv()
