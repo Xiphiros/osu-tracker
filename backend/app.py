@@ -96,13 +96,14 @@ def serve_song_file(file_path):
 def scan_replays_folder():
     """
     API endpoint to scan the osu! replays folder, parse new replays,
-    and add them to the database.
+    calculate their PP, and add them to the database.
     """
     osu_folder = os.getenv('OSU_FOLDER')
     if not osu_folder:
         return jsonify({"error": "OSU_FOLDER path not set in .env file"}), 500
 
     replays_path = os.path.join(osu_folder, 'Data', 'r')
+    songs_path = os.path.join(osu_folder, 'Songs')
     
     if not os.path.isdir(replays_path):
         return jsonify({"error": f"Replays directory not found at: {replays_path}"}), 404
@@ -115,8 +116,25 @@ def scan_replays_folder():
             file_path = os.path.join(replays_path, file_name)
             try:
                 replay_data = parser.parse_replay_file(file_path)
-                if replay_data and replay_data.get('replay_md5'):
-                    database.add_replay(replay_data)
+                if not replay_data or not replay_data.get('replay_md5'):
+                    continue
+
+                # Prepare for PP calculation
+                replay_data['pp'] = None
+                replay_data['stars'] = None
+
+                beatmap_info = BEATMAP_CACHE.get(replay_data['beatmap_md5'])
+                if beatmap_info:
+                    osu_file_path = os.path.join(
+                        songs_path,
+                        beatmap_info['folder_name'],
+                        beatmap_info['osu_file_name']
+                    )
+                    if os.path.exists(osu_file_path):
+                        pp_info = parser.calculate_pp(osu_file_path, replay_data)
+                        replay_data.update(pp_info)
+                
+                database.add_replay(replay_data)
             except Exception as e:
                 print(f"Could not parse file {file_name}: {e}")
         
@@ -127,7 +145,6 @@ def scan_replays_folder():
 
     except Exception as e:
         return jsonify({"error": f"An error occurred during scan: {str(e)}"}), 500
-
 # This route now correctly serves index.html for the root path.
 # Other static files (like main.js, main.css) are handled automatically
 # by the static_folder and static_url_path config above.
