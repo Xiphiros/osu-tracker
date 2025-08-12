@@ -199,3 +199,12 @@ main#main-content {
     color: white;
     font-weight: bold;
 }
+
+.card-stats {
+    display: flex;
+    gap: 15px;
+    font-size: 0.8em;
+    font-weight: 500;
+    color: #ddd;
+    margin-top: 6px;
+}
