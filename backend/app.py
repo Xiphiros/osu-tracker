@@ -131,6 +131,11 @@ def scan_replays_folder():
     if not os.path.isdir(replays_path):
         return jsonify({"error": f"Replays directory not found at: {replays_path}"}), 404
     try:
+        # Refresh the beatmap cache to pick up any new maps since startup.
+        logging.info("Refreshing beatmap cache before scan...")
+        load_beatmap_cache()
+        logging.info("Beatmap cache refreshed.")
+
         replay_files = [f for f in os.listdir(replays_path) if f.endswith('.osr')]
         for file_name in replay_files:
             file_path = os.path.join(replays_path, file_name)
@@ -157,7 +162,7 @@ def scan_replays_folder():
     except Exception as e:
         logging.error(f"An error occurred during scan: {str(e)}", exc_info=True)
         return jsonify({"error": f"An error occurred during scan: {str(e)}"}), 500
-    
+      
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_index(path):
