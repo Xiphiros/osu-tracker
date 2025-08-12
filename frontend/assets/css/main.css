@@ -96,3 +96,57 @@ main#main-content {
 .view.active {
     display: block;
 }
+
+/* Player Selector in Sidebar */
+#user-selector-container {
+    margin-bottom: 20px;
+}
+#player-selector {
+    width: 100%;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background-color: #333;
+    color: var(--text-color);
+    font-size: 0.9em;
+}
+
+/* Profile View styles */
+#profile-header {
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+#profile-header h2 {
+    margin: 0 0 15px 0;
+}
+.stats-container {
+    display: flex;
+    gap: 20px;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+}
+.stat-item {
+    background-color: var(--card-bg);
+    padding: 15px 20px;
+    border-radius: 8px;
+    text-align: center;
+    border: 1px solid var(--border-color);
+    flex-grow: 1;
+}
+.stat-label {
+    display: block;
+    font-size: 0.9em;
+    color: #ccc;
+    margin-bottom: 5px;
+}
+.stat-value {
+    display: block;
+    font-size: 1.5em;
+    font-weight: 500;
+}
+#profile-replays-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
+    gap: 20px;
+}
