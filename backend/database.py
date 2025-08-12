@@ -2,18 +2,12 @@ import sqlite3
 
 DATABASE_FILE = 'osu_tracker.db'
 
-def get_db_connection():
-    """Establishes a connection to the SQLite database."""
-    conn = sqlite3.connect(DATABASE_FILE)
-    conn.row_factory = sqlite3.Row  # This allows accessing columns by name
-    return conn
-
 def init_db():
     """Initializes the database and creates the 'replays' table if it doesn't exist."""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Added mods_used field
+    # Added bpm field
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS replays (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,6 +28,7 @@ def init_db():
             pp REAL,
             stars REAL,
             map_max_combo INTEGER,
+            bpm REAL,
             played_at TEXT,
             parsed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -42,7 +37,7 @@ def init_db():
     conn.commit()
     conn.close()
     print("Database initialized successfully.")
-
+    
 def add_replay(replay_data):
     """Adds a new replay record to the database. Ignores duplicates based on replay_md5."""
     conn = get_db_connection()
@@ -69,7 +64,7 @@ def add_replay(replay_data):
     
     conn.commit()
     conn.close()
-    
+
 def get_all_replays(player_name=None):
     """Retrieves all replay records from the database, optionally filtering by player name."""
     conn = get_db_connection()
