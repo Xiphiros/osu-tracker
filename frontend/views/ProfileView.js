@@ -106,14 +106,18 @@ export async function loadProfile(viewElement, playerName) {
     }
 
     try {
-        const [stats, replays] = await Promise.all([getPlayerStats(playerName), getReplays(playerName)]);
+        const [stats, replaysData] = await Promise.all([
+            getPlayerStats(playerName), 
+            getReplays(playerName, 1, 100000) // Fetch all scores for the profile view
+        ]);
 
         statsContainer.innerHTML = `
             <div class="stat-item"><span class="stat-label">Total PP</span><span class="stat-value">${stats.total_pp.toLocaleString()}</span></div>
             <div class="stat-item"><span class="stat-label">Play Count</span><span class="stat-value">${stats.play_count.toLocaleString()}</span></div>
             <div class="stat-item"><span class="stat-label">Top Play</span><span class="stat-value">${stats.top_play_pp.toLocaleString()}pp</span></div>
         `;
-
+        
+        const replays = replaysData.replays;
         allScores = replays;
         
         const uniqueMods = [...new Set(replays.flatMap(r => getModsFromInt(r.mods_used)))].sort();
