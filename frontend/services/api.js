@@ -37,6 +37,15 @@ export const scanReplays = async () => {
     return response.json();
 };
 
+export const syncBeatmaps = async () => {
+    const response = await fetch(`${API_BASE_URL}/sync-beatmaps`, { method: 'POST' });
+     if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to sync beatmap database.');
+    }
+    return response.json();
+};
+
 export const getSongFileUrl = (folderName, fileName) => {
     if (!folderName || !fileName) return '';
     return `${API_BASE_URL}/songs/${encodeURIComponent(folderName)}/${encodeURIComponent(fileName)}`;
