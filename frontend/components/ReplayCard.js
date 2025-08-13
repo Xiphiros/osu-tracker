@@ -39,6 +39,17 @@ export function createReplayCard(item) {
     } else {
         bpmText = 'N/A';
     }
+    
+    const aimValue = item.aim ? item.aim.toFixed(2) : null;
+    const speedValue = item.speed ? item.speed.toFixed(2) : null;
+    let skillHtml = '';
+    if (aimValue && speedValue) {
+        skillHtml = `
+            <span class="stat-skill stat-aim" title="Aim Difficulty: ${aimValue}">🎯 ${aimValue}</span>
+            <span class="stat-skill stat-speed" title="Speed Difficulty: ${speedValue}">⚡ ${speedValue}</span>
+        `;
+    }
+
 
     right.innerHTML = `
         <div>
@@ -47,6 +58,7 @@ export function createReplayCard(item) {
             <div class="card-player">Played by ${item.player_name || 'Unknown Player'}</div>
             <div class="card-stats">
                 <span class="stat-stars">★ ${item.stars ? item.stars.toFixed(2) : 'N/A'}</span>
+                ${skillHtml}
                 <span class="stat-bpm">♫ ${bpmText} BPM</span>
             </div>
         </div>
