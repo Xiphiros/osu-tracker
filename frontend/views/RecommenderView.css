@@ -125,9 +125,16 @@
 
 .recommender-feedback {
     display: none; /* Hidden by default */
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
     gap: 20px;
     margin-top: 20px;
+}
+
+.recommender-feedback-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
 }
 
 .recommender-feedback button {
@@ -162,4 +169,19 @@
 }
 #skip-button:hover {
     background-color: #5a6268;
+}
+
+#check-play-button {
+    background-color: #563d7c;
+    color: white;
+}
+#check-play-button:hover:not(:disabled) {
+    background-color: #463265;
+}
+
+/* Inherits progress styles from config view */
+.recommender-feedback .progress-container {
+    width: 100%;
+    max-width: 600px;
+    display: none;
 }
