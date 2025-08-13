@@ -483,16 +483,14 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[], focus=None):
     focus_clause = ""
     # Use the cached modded values if a core mod is selected.
     if base_mod != 0:
-        table_alias = "c"
-        if focus == 'aim': # Jump Aim
+        total_objects_expr = "(b.num_hitcircles + b.num_sliders + b.num_spinners)"
+        if focus == 'jumps':
             focus_clause = " AND c.aim > c.speed * 1.1 AND c.slider_factor > 0.95 "
-        elif focus == 'speed': # Burst Speed
-            total_objects_expr = "(b.num_hitcircles + b.num_sliders + b.num_spinners)"
+        elif focus == 'flow':
+            focus_clause = f" AND (c.aim_difficult_slider_count / NULLIF(b.num_sliders, 0)) > 0.5 AND b.num_sliders > {total_objects_expr} * 0.2 "
+        elif focus == 'speed':
             focus_clause = f" AND c.speed > c.aim * 1.1 AND (c.speed_note_count / {total_objects_expr}) < 0.4 "
-        elif focus == 'technical': # Technical Aim
-            focus_clause = " AND (c.aim_difficult_slider_count / b.num_sliders) > 0.5 AND b.num_sliders > (b.num_hitcircles + b.num_sliders + b.num_spinners) * 0.2 "
-        elif focus == 'stamina': # Stream/Stamina Speed
-            total_objects_expr = "(b.num_hitcircles + b.num_sliders + b.num_spinners)"
+        elif focus == 'stamina':
             focus_clause = f" AND (c.speed_note_count / {total_objects_expr}) > 0.4 "
 
         exclude_placeholders = '?' * len(excluded_ids)
@@ -503,7 +501,7 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[], focus=None):
             WHERE c.mods = ?
               AND c.stars >= ? AND c.stars < ?
               AND c.bpm <= ?
-              AND b.game_mode = 0 AND b.num_sliders > 0 AND (b.num_hitcircles + b.num_sliders + b.num_spinners) > 0
+              AND b.game_mode = 0 AND {total_objects_expr} > 0
               {focus_clause}
               {f"AND b.md5_hash NOT IN ({','.join(exclude_placeholders)})" if excluded_ids else ""}
             ORDER BY RANDOM()
@@ -514,22 +512,20 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[], focus=None):
         cursor.execute(query, params)
         row = cursor.fetchone()
     else: # NoMod calculation
-        table_alias = "b"
-        if focus == 'aim': # Jump Aim
+        total_objects_expr = "(b.num_hitcircles + b.num_sliders + b.num_spinners)"
+        if focus == 'jumps':
             focus_clause = " AND b.aim > b.speed * 1.1 AND b.slider_factor > 0.95 "
-        elif focus == 'speed': # Burst Speed
-            total_objects_expr = "(b.num_hitcircles + b.num_sliders + b.num_spinners)"
+        elif focus == 'flow':
+            focus_clause = f" AND (b.aim_difficult_slider_count / NULLIF(b.num_sliders, 0)) > 0.5 AND b.num_sliders > {total_objects_expr} * 0.2 "
+        elif focus == 'speed':
             focus_clause = f" AND b.speed > b.aim * 1.1 AND (b.speed_note_count / {total_objects_expr}) < 0.4 "
-        elif focus == 'technical': # Technical Aim
-            focus_clause = " AND (b.aim_difficult_slider_count / b.num_sliders) > 0.5 AND b.num_sliders > (b.num_hitcircles + b.num_sliders + b.num_spinners) * 0.2 "
-        elif focus == 'stamina': # Stream/Stamina Speed
-            total_objects_expr = "(b.num_hitcircles + b.num_sliders + b.num_spinners)"
+        elif focus == 'stamina':
             focus_clause = f" AND (b.speed_note_count / {total_objects_expr}) > 0.4 "
 
         exclude_placeholders = '?' * len(excluded_ids)
         query = f"""
             SELECT *, stars as modded_stars FROM beatmaps b
-            WHERE game_mode = 0 AND num_sliders > 0 AND (num_hitcircles + num_sliders + num_spinners) > 0
+            WHERE game_mode = 0 AND {total_objects_expr} > 0
               AND stars >= ? AND stars < ?
               AND bpm <= ?
               {focus_clause}
