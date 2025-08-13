@@ -16,15 +16,25 @@ def init_db():
     def _migrate_db(conn):
         """Applies necessary schema migrations to an existing database."""
         cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(replays)")
-        columns = [row['name'] for row in cursor.fetchall()]
         
-        if 'bpm_min' not in columns:
+        # Migration for replays table
+        cursor.execute("PRAGMA table_info(replays)")
+        replay_columns = [row['name'] for row in cursor.fetchall()]
+        
+        if 'bpm_min' not in replay_columns:
             logging.info("Applying migration: Adding 'bpm_min' to 'replays' table.")
             cursor.execute("ALTER TABLE replays ADD COLUMN bpm_min REAL")
-        if 'bpm_max' not in columns:
+        if 'bpm_max' not in replay_columns:
             logging.info("Applying migration: Adding 'bpm_max' to 'replays' table.")
             cursor.execute("ALTER TABLE replays ADD COLUMN bpm_max REAL")
+
+        # Migration for beatmaps table
+        cursor.execute("PRAGMA table_info(beatmaps)")
+        beatmap_columns = [row['name'] for row in cursor.fetchall()]
+        
+        if 'stars' not in beatmap_columns:
+            logging.info("Applying migration: Adding 'stars' to 'beatmaps' table.")
+            cursor.execute("ALTER TABLE beatmaps ADD COLUMN stars REAL")
         
         conn.commit()
 
@@ -80,6 +90,7 @@ def init_db():
             cs REAL,
             hp REAL,
             od REAL,
+            stars REAL,
             bpm REAL,
             audio_file TEXT,
             background_file TEXT,
@@ -254,8 +265,8 @@ def add_or_update_beatmaps(beatmaps_data):
             data.get('difficulty'), data.get('folder_name'), data.get('osu_file_name'),
             json.dumps(data.get('grades', {})), data.get('last_played_date'),
             data.get('num_hitcircles'), data.get('num_sliders'), data.get('num_spinners'),
-            data.get('ar'), data.get('cs'), data.get('hp'), data.get('od'), data.get('bpm'),
-            data.get('audio_file'), data.get('background_file'), 
+            data.get('ar'), data.get('cs'), data.get('hp'), data.get('od'), data.get('stars'),
+            data.get('bpm'), data.get('audio_file'), data.get('background_file'), 
             data.get('bpm_min'), data.get('bpm_max')
         ))
 
@@ -267,9 +278,9 @@ def add_or_update_beatmaps(beatmaps_data):
         INSERT INTO beatmaps (
             md5_hash, artist, title, creator, difficulty, folder_name, osu_file_name,
             grades, last_played_date, num_hitcircles, num_sliders, num_spinners,
-            ar, cs, hp, od, bpm,
+            ar, cs, hp, od, stars, bpm,
             audio_file, background_file, bpm_min, bpm_max
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(md5_hash) DO UPDATE SET
             artist=excluded.artist,
             title=excluded.title,
@@ -282,7 +293,9 @@ def add_or_update_beatmaps(beatmaps_data):
             num_hitcircles=excluded.num_hitcircles,
             num_sliders=excluded.num_sliders,
             num_spinners=excluded.num_spinners,
-            ar=excluded.ar, cs=excluded.cs, hp=excluded.hp, od=excluded.od, bpm=excluded.bpm,
+            ar=excluded.ar, cs=excluded.cs, hp=excluded.hp, od=excluded.od, 
+            stars=COALESCE(beatmaps.stars, excluded.stars),
+            bpm=excluded.bpm,
             audio_file=COALESCE(beatmaps.audio_file, excluded.audio_file),
             background_file=COALESCE(beatmaps.background_file, excluded.background_file),
             bpm_min=COALESCE(beatmaps.bpm_min, excluded.bpm_min),
