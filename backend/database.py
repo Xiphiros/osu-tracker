@@ -344,20 +344,39 @@ def get_recommendation(target_sr, max_bpm):
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    sr_upper_bound = target_sr + 0.1
+    params = (target_sr, sr_upper_bound, max_bpm)
+    
+    logging.debug(f"Searching for recommendation with params: sr >= {params[0]}, sr < {params[1]}, bpm <= {params[2]}")
+
+    # Debugging query to count potential matches
+    count_query = """
+        SELECT COUNT(*) FROM beatmaps 
+        WHERE 
+            game_mode = 0 
+            AND stars IS NOT NULL AND stars >= ? AND stars < ? 
+            AND bpm IS NOT NULL AND bpm <= ?
+    """
+    cursor.execute(count_query, params)
+    match_count = cursor.fetchone()[0]
+    logging.debug(f"Found {match_count} potential maps matching criteria.")
+
+    if match_count == 0:
+        conn.close()
+        return None
+
+    # Original query to get a random map
     query = """
         SELECT * FROM beatmaps 
         WHERE 
             game_mode = 0 
-            AND stars >= ? 
-            AND stars < ? 
-            AND bpm <= ?
+            AND stars IS NOT NULL AND stars >= ? AND stars < ? 
+            AND bpm IS NOT NULL AND bpm <= ?
         ORDER BY RANDOM() 
         LIMIT 1
     """
     
-    sr_upper_bound = target_sr + 0.1
-    cursor.execute(query, (target_sr, sr_upper_bound, max_bpm))
-    
+    cursor.execute(query, params)
     row = cursor.fetchone()
     conn.close()
     
