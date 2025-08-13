@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 
 import database
 import parser
+import rosu_pp_py
 
 # Determine if running in a PyInstaller bundle
 IS_BUNDLED = getattr(sys, 'frozen', False)
@@ -196,7 +197,7 @@ def get_recommendation():
         if beatmap:
             return jsonify(beatmap)
         else:
-            return jsonify({"message": "No suitable beatmap found."}), 404
+            return jsonify({"message": "No new map found. Try adjusting the values."}), 404
             
     except Exception as e:
         logging.error(f"Error in recommendation endpoint: {e}", exc_info=True)
@@ -244,18 +245,49 @@ def serve_index(path):
         return send_from_directory(app.static_folder, path)
     return send_from_directory(app.static_folder, 'index.html')
 
-def process_osu_file(osu_file_path, md5):
-    """Helper function to process a single .osu file for parallel execution."""
+def process_osu_file_and_cache(osu_file_path, base_bpm, md5):
+    """Helper to process a .osu file and calculate difficulties for caching."""
     try:
         details = parser.parse_osu_file(osu_file_path)
-        details.update(parser.calculate_difficulty(osu_file_path))
-        return md5, details
+        if details.get('bpm'): # Prefer .osu file BPM if available
+            base_bpm = details['bpm']
+
+        rosu_map = rosu_pp_py.Beatmap(path=osu_file_path)
+        
+        # Calculate NoMod difficulty
+        nomod_diff_attrs = rosu_pp_py.Difficulty().calculate(rosu_map)
+        details['stars'] = nomod_diff_attrs.stars
+        
+        # Calculate difficulties for cacheable mods
+        # Mods that change SR/BPM: EZ (2), HR (16), DT (64), HT (256)
+        mods_to_cache = [2, 16, 64, 256]
+        mod_cache_results = []
+
+        for mod_int in mods_to_cache:
+            diff_calc = rosu_pp_py.Difficulty(mods=mod_int)
+            diff_attrs = diff_calc.calculate(rosu_map)
+            
+            attr_builder = rosu_pp_py.BeatmapAttributesBuilder(map=rosu_map, mods=mod_int)
+            map_attrs = attr_builder.build()
+
+            mod_cache_results.append({
+                'md5_hash': md5,
+                'mods': mod_int,
+                'stars': round(diff_attrs.stars, 2),
+                'ar': round(map_attrs.ar, 2),
+                'od': round(map_attrs.od, 2),
+                'cs': round(map_attrs.cs, 2),
+                'hp': round(map_attrs.hp, 2),
+                'bpm': round(base_bpm * map_attrs.clock_rate, 2),
+            })
+
+        return md5, details, mod_cache_results
     except Exception as e:
-        logging.warning(f"Could not parse or process .osu file {osu_file_path}: {e}")
-        return md5, {}
+        logging.warning(f"Could not parse/process file {osu_file_path}: {e}")
+        return md5, {}, []
 
 def sync_local_beatmaps_task():
-    """Task to parse osu!.db and .osu files, updating global progress."""
+    """Task to parse osu!.db, .osu files, and cache difficulties."""
     progress = TASK_PROGRESS['sync']
     progress['status'] = 'running'
     progress['current'] = 0
@@ -276,19 +308,18 @@ def sync_local_beatmaps_task():
         
         tasks = []
         for md5, beatmap in beatmap_data.items():
-             if beatmap.get('folder_name') and beatmap.get('osu_file_name'):
+             if beatmap.get('folder_name') and beatmap.get('osu_file_name') and beatmap.get('game_mode') == 0:
                 osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
                 if os.path.exists(osu_file_path):
-                    tasks.append((osu_file_path, md5))
+                    tasks.append((osu_file_path, beatmap.get('bpm', 0), md5))
 
         progress['message'] = f"Calculating difficulty for {len(tasks)} beatmaps..."
         progress['total'] = len(tasks)
         progress['current'] = 0
+        all_mod_caches = []
 
-        # Use a ThreadPoolExecutor for I/O-bound and GIL-releasing CPU-bound tasks.
-        # This will significantly speed up parsing and calculating thousands of .osu files.
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_md5 = {executor.submit(process_osu_file, path, md5): md5 for path, md5 in tasks}
+            future_to_md5 = {executor.submit(process_osu_file_and_cache, path, bpm, md5): md5 for path, bpm, md5 in tasks}
             
             for future in concurrent.futures.as_completed(future_to_md5):
                 progress['current'] += 1
@@ -297,14 +328,20 @@ def sync_local_beatmaps_task():
                 progress['message'] = f"Processing {beatmap_name}..."
                 
                 try:
-                    _md5, result_data = future.result()
+                    _md5, result_data, mod_caches = future.result()
                     if result_data:
                         beatmap_data[_md5].update(result_data)
+                    if mod_caches:
+                        all_mod_caches.extend(mod_caches)
                 except Exception as e:
                     logging.error(f"Error processing future for {beatmap_name}: {e}", exc_info=True)
 
-        progress['message'] = 'Saving to database...'
+        progress['message'] = 'Saving beatmaps to database...'
         database.add_or_update_beatmaps(beatmap_data)
+        
+        if all_mod_caches:
+            progress['message'] = f'Saving {len(all_mod_caches)} mod difficulty caches...'
+            database.add_beatmap_mod_cache(all_mod_caches)
 
         progress['status'] = 'complete'
         progress['message'] = 'Beatmap database synchronization complete.'
