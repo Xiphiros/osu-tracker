@@ -94,8 +94,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Listen for the custom 'datachanged' event from the Config view
     mainContent.addEventListener('datachanged', () => {
-        console.log('Data changed event received, refreshing player list.');
+        console.log('Data changed event received, refreshing player list and current view.');
         populatePlayerSelector();
+        
+        // Also refresh the current view
+        const activeView = mainContent.querySelector('.view.active');
+        if (activeView) {
+            const viewName = activeView.dataset.viewName;
+            const view = views[viewName];
+            if (view) {
+                switch(viewName) {
+                    case 'scores':
+                        loadScores(view);
+                        break;
+                    case 'profile':
+                        if (currentPlayer) loadProfile(view, currentPlayer);
+                        break;
+                    case 'beatmaps':
+                        loadBeatmaps(view);
+                        break;
+                    // No action needed for 'config' view itself
+                }
+            }
+        }
     });
 
     async function initializeApp() {
