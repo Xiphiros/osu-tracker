@@ -27,14 +27,16 @@ export function createBeatmapCard(beatmap) {
         bpmText = 'N/A';
     }
 
-    const aimValue = beatmap.aim;
-    const speedValue = beatmap.speed;
+    const aimValue = beatmap.aim ? beatmap.aim.toFixed(2) : null;
+    const speedValue = beatmap.speed ? beatmap.speed.toFixed(2) : null;
+    const techValue = beatmap.slider_factor ? beatmap.slider_factor.toFixed(2) : null;
     let skillHtml = '';
     if (aimValue && speedValue) {
-        skillHtml = `
-            <div class="stat-item stat-aim" title="Aim Difficulty"><span class="label">🎯</span><span class="value">${aimValue}</span></div>
-            <div class="stat-item stat-speed" title="Speed Difficulty"><span class="label">⚡</span><span class="value">${speedValue}</span></div>
-        `;
+        skillHtml += `<div class="stat-item stat-aim" title="Aim Difficulty"><span class="label">🎯</span><span class="value">${aimValue}</span></div>`;
+        skillHtml += `<div class="stat-item stat-speed" title="Speed Difficulty"><span class="label">⚡</span><span class="value">${speedValue}</span></div>`;
+    }
+    if (techValue) {
+        skillHtml += `<div class="stat-item stat-tech" title="Technical Difficulty (Slider Factor)"><span class="label">⚙️</span><span class="value">${techValue}</span></div>`;
     }
 
 
