@@ -5,44 +5,54 @@ import { getModsFromInt } from '../utils/mods.js';
 let allScores = [];
 let viewInitialized = false;
 let profileChart = null;
-let currentChartType = 'pp';
 const activeModFilters = new Set();
 
-// --- Helper Functions ---
 function calculateAccuracy(replay) {
     const totalHits = replay.num_300s + replay.num_100s + replay.num_50s + replay.num_misses;
     if (totalHits === 0) return 0;
     return ((replay.num_300s * 300 + replay.num_100s * 100 + replay.num_50s * 50) / (totalHits * 300)) * 100;
 }
 
-function renderProfileChart(scores, type) {
+function groupScoresByDay(scores) {
+    const grouped = {};
+    scores.forEach(score => {
+        if (!score.played_at) return;
+        const date = new Date(score.played_at).toISOString().split('T')[0];
+        if (!grouped[date]) {
+            grouped[date] = [];
+        }
+        grouped[date].push(score);
+    });
+    return grouped;
+}
+
+function renderProfileChart(chartConfig) {
     const chartWrapper = document.getElementById('chart-wrapper');
     if (!chartWrapper) return;
-    chartWrapper.style.display = scores.length > 0 ? 'block' : 'none';
-
-    if (profileChart) {
-        profileChart.destroy();
+    
+    if (profileChart) profileChart.destroy();
+    
+    if (!chartConfig || chartConfig.data.length === 0) {
+        chartWrapper.style.display = 'none';
+        return;
     }
-    if (scores.length === 0) return;
+    chartWrapper.style.display = 'block';
 
+    const { labels, data, type, yLabel } = chartConfig;
     const ctx = document.getElementById('profile-chart').getContext('2d');
-    const chartLabel = type === 'pp' ? 'PP Over Time' : 'Star Rating Over Time';
-    const chartData = scores.map(s => (type === 'pp' ? s.pp : s.stars) || 0);
-    const pointColor = type === 'pp' ? 'rgba(0, 170, 255, 0.8)' : 'rgba(255, 204, 34, 0.8)';
-    const lineColor = type === 'pp' ? 'rgba(0, 170, 255, 0.5)' : 'rgba(255, 204, 34, 0.5)';
-
+    
     profileChart = new Chart(ctx, {
-        type: 'line',
+        type: type,
         data: {
-            labels: scores.map(s => new Date(s.played_at)),
             datasets: [{
-                label: chartLabel,
-                data: chartData,
-                backgroundColor: pointColor,
-                borderColor: lineColor,
+                label: yLabel,
+                data: labels.map((label, index) => ({ x: label, y: data[index] })),
+                backgroundColor: 'rgba(0, 170, 255, 0.8)',
+                borderColor: 'rgba(0, 170, 255, 0.5)',
                 borderWidth: 2,
                 pointRadius: 3,
-                tension: 0.1
+                tension: (type === 'line') ? 0.1 : 0,
+                stepped: chartConfig.stepped || false,
             }]
         },
         options: {
@@ -51,16 +61,13 @@ function renderProfileChart(scores, type) {
             scales: {
                 x: {
                     type: 'time',
-                    time: {
-                        unit: 'month',
-                        tooltipFormat: 'MMM yyyy',
-                        displayFormats: { month: 'MMM yyyy' }
-                    },
+                    time: { unit: 'month', tooltipFormat: 'MMM d, yyyy', displayFormats: { month: 'MMM yyyy' } },
                     grid: { color: 'rgba(255, 255, 255, 0.1)' },
                     ticks: { color: '#ccc' }
                 },
                 y: {
-                    beginAtZero: true,
+                    beginAtZero: false,
+                    title: { display: true, text: yLabel, color: '#ccc' },
                     grid: { color: 'rgba(255, 255, 255, 0.1)' },
                     ticks: { color: '#ccc' }
                 }
@@ -70,7 +77,7 @@ function renderProfileChart(scores, type) {
                 tooltip: {
                     callbacks: {
                         title: context => new Date(context[0].parsed.x).toLocaleDateString(),
-                        label: context => `${type.toUpperCase()}: ${context.parsed.y.toFixed(2)}`
+                        label: context => `${yLabel}: ${context.parsed.y.toFixed(2)}`
                     }
                 }
             }
@@ -78,7 +85,6 @@ function renderProfileChart(scores, type) {
     });
 }
 
-// --- Main View and Logic ---
 function applyFiltersAndRender(viewElement) {
     const replaysContainer = viewElement.querySelector('#profile-replays-container');
     const analyticsContainer = viewElement.querySelector('#profile-analytics');
@@ -86,6 +92,7 @@ function applyFiltersAndRender(viewElement) {
     analyticsContainer.innerHTML = '';
 
     const sortValue = viewElement.querySelector('#sort-select').value;
+    const chartType = viewElement.querySelector('#chart-type-select').value;
     const minAcc = parseFloat(viewElement.querySelector('#acc-filter-min').value) || 0;
     const maxAcc = parseFloat(viewElement.querySelector('#acc-filter-max').value) || 100;
     const minStars = parseFloat(viewElement.querySelector('#stars-filter-min').value) || 0;
@@ -93,7 +100,7 @@ function applyFiltersAndRender(viewElement) {
     const maxBpm = parseFloat(viewElement.querySelector('#bpm-filter-max').value) || Infinity;
     const exactMatch = viewElement.querySelector('#exact-mod-match-toggle').checked;
 
-    let filteredScores = allScores;
+    let filteredScores = allScores.filter(s => s.played_at);
 
     if (activeModFilters.size > 0) {
         filteredScores = filteredScores.filter(replay => {
@@ -109,28 +116,70 @@ function applyFiltersAndRender(viewElement) {
         const acc = calculateAccuracy(replay);
         const stars = replay.stars || 0;
         const bpm = replay.beatmap?.bpm || 0;
-        
-        return acc >= minAcc && acc <= maxAcc &&
-               stars >= minStars &&
-               bpm >= minBpm && bpm <= maxBpm;
+        return acc >= minAcc && acc <= maxAcc && stars >= minStars && bpm >= minBpm && bpm <= maxBpm;
     });
 
     if (filteredScores.length > 0) {
         const scoresForAnalytics = [...filteredScores].sort((a, b) => (b.stars || 0) - (a.stars || 0)).slice(0, 100);
         const totalStars = scoresForAnalytics.reduce((sum, score) => sum + (score.stars || 0), 0);
         const avgStars = scoresForAnalytics.length > 0 ? (totalStars / scoresForAnalytics.length).toFixed(2) : '0.00';
-        
-        analyticsContainer.innerHTML = `
-            <div class="stat-item">
-                <span class="stat-label">Average Star Rating (Top ${scoresForAnalytics.length} Plays)</span>
-                <span class="stat-value">★ ${avgStars}</span>
-            </div>
-        `;
+        analyticsContainer.innerHTML = `<div class="stat-item"><span class="stat-label">Average Star Rating (Top ${scoresForAnalytics.length} Plays)</span><span class="stat-value">★ ${avgStars}</span></div>`;
     }
 
     const scoresForChart = [...filteredScores].sort((a, b) => new Date(a.played_at) - new Date(b.played_at));
-    renderProfileChart(scoresForChart, currentChartType);
+    let chartConfig = null;
 
+    switch (chartType) {
+        case 'total_pp': {
+            let cumulativePlays = [];
+            const data = scoresForChart.map(score => {
+                cumulativePlays.push(score);
+                const ppPlays = cumulativePlays.filter(p => p.pp > 0).sort((a, b) => b.pp - a.pp);
+                const totalPp = ppPlays.reduce((sum, p, i) => sum + p.pp * (0.95 ** i), 0);
+                return { x: new Date(score.played_at), y: totalPp };
+            });
+            chartConfig = { labels: data.map(p => p.x), data: data.map(p => p.y), type: 'line', yLabel: 'Total PP (Filtered)', stepped: false };
+            break;
+        }
+        case 'top_play_pp': {
+            let maxPp = 0;
+            const data = scoresForChart.map(score => { maxPp = Math.max(maxPp, score.pp || 0); return { x: new Date(score.played_at), y: maxPp }; });
+            chartConfig = { labels: data.map(p => p.x), data: data.map(p => p.y), type: 'line', yLabel: 'Top Play (PP)', stepped: true };
+            break;
+        }
+        case 'daily_avg_pp': {
+            const grouped = groupScoresByDay(scoresForChart);
+            const data = Object.keys(grouped).map(date => { const dayScores = grouped[date]; const total = dayScores.reduce((sum, s) => sum + (s.pp || 0), 0); return { x: date, y: total / dayScores.length }; });
+            chartConfig = { labels: data.map(p => p.x), data: data.map(p => p.y), type: 'bar', yLabel: 'Daily Avg PP' };
+            break;
+        }
+        case 'highest_sr': {
+            let maxSr = 0;
+            const data = scoresForChart.map(score => { maxSr = Math.max(maxSr, score.stars || 0); return { x: new Date(score.played_at), y: maxSr }; });
+            chartConfig = { labels: data.map(p => p.x), data: data.map(p => p.y), type: 'line', yLabel: 'Highest SR Passed', stepped: true };
+            break;
+        }
+        case 'daily_avg_sr': {
+            const grouped = groupScoresByDay(scoresForChart);
+            const data = Object.keys(grouped).map(date => { const dayScores = grouped[date]; const total = dayScores.reduce((sum, s) => sum + (s.stars || 0), 0); return { x: date, y: total / dayScores.length }; });
+            chartConfig = { labels: data.map(p => p.x), data: data.map(p => p.y), type: 'bar', yLabel: 'Daily Avg SR' };
+            break;
+        }
+        case 'daily_avg_acc': {
+            const grouped = groupScoresByDay(scoresForChart);
+            const data = Object.keys(grouped).map(date => { const dayScores = grouped[date]; const total = dayScores.reduce((sum, s) => sum + calculateAccuracy(s), 0); return { x: date, y: total / dayScores.length }; });
+            chartConfig = { labels: data.map(p => p.x), data: data.map(p => p.y), type: 'bar', yLabel: 'Daily Avg Accuracy (%)' };
+            break;
+        }
+        case 'play_count': {
+            const grouped = groupScoresByDay(scoresForChart);
+            const data = Object.keys(grouped).map(date => ({ x: date, y: grouped[date].length }));
+            chartConfig = { labels: data.map(p => p.x), data: data.map(p => p.y), type: 'bar', yLabel: 'Daily Play Count' };
+            break;
+        }
+    }
+    renderProfileChart(chartConfig);
+    
     filteredScores.sort((a, b) => {
         switch (sortValue) {
             case 'pp': return (b.pp || 0) - (a.pp || 0);
@@ -141,12 +190,9 @@ function applyFiltersAndRender(viewElement) {
         }
     });
     
-    if (filteredScores.length > 0) {
-        filteredScores.forEach(replay => replaysContainer.appendChild(createReplayCard(replay)));
-    } else {
-        replaysContainer.innerHTML = '<p>No scores match the current filters.</p>';
-    }
-     document.getElementById('status-message').textContent = `Displaying ${filteredScores.length} scores.`;
+    replaysContainer.innerHTML = filteredScores.length > 0 ? '' : '<p>No scores match the current filters.</p>';
+    filteredScores.forEach(replay => replaysContainer.appendChild(createReplayCard(replay)));
+    document.getElementById('status-message').textContent = `Displaying ${filteredScores.length} scores.`;
 }
 
 export function createProfileView() {
@@ -182,10 +228,23 @@ export function createProfileView() {
         </div>
         <div id="chart-section">
             <div class="chart-controls">
-                <button id="chart-btn-pp" class="active">PP Graph</button>
-                <button id="chart-btn-sr">SR Graph</button>
+                <select id="chart-type-select">
+                    <optgroup label="Performance">
+                        <option value="total_pp">Total PP (Filtered)</option>
+                        <option value="top_play_pp">Top Play PP</option>
+                        <option value="daily_avg_pp">Daily Average PP</option>
+                    </optgroup>
+                    <optgroup label="Skill & Difficulty">
+                        <option value="highest_sr">Highest SR Passed</option>
+                        <option value="daily_avg_sr">Daily Average SR</option>
+                        <option value="daily_avg_acc">Daily Average Accuracy</option>
+                    </optgroup>
+                    <optgroup label="Activity">
+                        <option value="play_count">Daily Play Count</option>
+                    </optgroup>
+                </select>
             </div>
-            <div id="chart-wrapper" class="chart-wrapper">
+            <div id="chart-wrapper" class="chart-wrapper" style="display: none;">
                 <canvas id="profile-chart"></canvas>
             </div>
         </div>
@@ -213,26 +272,10 @@ export async function loadProfile(viewElement, playerName) {
     statusMessage.textContent = `Loading ${playerName}'s profile...`;
     
     if (!viewInitialized) {
-        viewElement.querySelectorAll('#sort-select, #acc-filter-min, #acc-filter-max, #stars-filter-min, #bpm-filter-min, #bpm-filter-max, #exact-mod-match-toggle').forEach(el => {
+        const allFilters = '#sort-select, #acc-filter-min, #acc-filter-max, #stars-filter-min, #bpm-filter-min, #bpm-filter-max, #exact-mod-match-toggle, #chart-type-select';
+        viewElement.querySelectorAll(allFilters).forEach(el => {
             el.addEventListener('input', () => applyFiltersAndRender(viewElement));
         });
-
-        const ppBtn = viewElement.querySelector('#chart-btn-pp');
-        const srBtn = viewElement.querySelector('#chart-btn-sr');
-
-        ppBtn.addEventListener('click', () => {
-            currentChartType = 'pp';
-            ppBtn.classList.add('active');
-            srBtn.classList.remove('active');
-            applyFiltersAndRender(viewElement);
-        });
-        srBtn.addEventListener('click', () => {
-            currentChartType = 'sr';
-            srBtn.classList.add('active');
-            ppBtn.classList.remove('active');
-            applyFiltersAndRender(viewElement);
-        });
-        
         viewInitialized = true;
     }
 
@@ -248,10 +291,9 @@ export async function loadProfile(viewElement, playerName) {
             <div class="stat-item"><span class="stat-label">Top Play</span><span class="stat-value">${stats.top_play_pp.toLocaleString()}pp</span></div>
         `;
         
-        const replays = replaysData.replays;
-        allScores = replays;
+        allScores = replaysData.replays;
         
-        const uniqueMods = [...new Set(replays.flatMap(r => getModsFromInt(r.mods_used)))].sort();
+        const uniqueMods = [...new Set(allScores.flatMap(r => getModsFromInt(r.mods_used)))].sort();
         uniqueMods.forEach(mod => {
             const button = document.createElement('button');
             button.className = 'mod-button';
@@ -259,11 +301,8 @@ export async function loadProfile(viewElement, playerName) {
             button.dataset.mod = mod;
             button.addEventListener('click', () => {
                 button.classList.toggle('active');
-                if (activeModFilters.has(mod)) {
-                    activeModFilters.delete(mod);
-                } else {
-                    activeModFilters.add(mod);
-                }
+                if (activeModFilters.has(mod)) activeModFilters.delete(mod);
+                else activeModFilters.add(mod);
                 applyFiltersAndRender(viewElement);
             });
             modContainer.appendChild(button);
