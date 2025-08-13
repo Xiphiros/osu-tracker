@@ -14,6 +14,37 @@
     gap: 15px;
 }
 
+.skill-focus-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 10px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+.skill-focus-container .radio-group {
+    display: flex;
+    gap: 10px;
+}
+.skill-focus-container input[type="radio"] {
+    display: none;
+}
+.skill-focus-container label {
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 4px;
+    background-color: #333;
+    border: 1px solid var(--border-color);
+    transition: background-color 0.2s, color 0.2s;
+}
+.skill-focus-container input[type="radio"]:checked + label {
+    background-color: var(--accent-color);
+    color: white;
+    font-weight: 500;
+    border-color: var(--accent-hover);
+}
+
+
 .recommender-actions-wrapper {
     display: flex;
     gap: 15px;
