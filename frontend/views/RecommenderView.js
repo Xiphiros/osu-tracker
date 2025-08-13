@@ -2,7 +2,8 @@ import {
 	getRecommendation,
 	getLatestReplay,
 	scanReplays,
-	getProgressStatus
+	getProgressStatus,
+	getSuggestedSr
 } from '../services/api.js';
 import {
 	createBeatmapCard
@@ -48,7 +49,10 @@ export function createRecommenderView() {
             <div class="recommender-inputs-wrapper">
                 <div class="control-group">
                     <label for="target-sr">Target Star Rating</label>
-                    <input type="number" id="target-sr" value="${savedSr}" step="0.1" min="1">
+                    <div class="input-with-button">
+                        <input type="number" id="target-sr" value="${savedSr}" step="0.1" min="1">
+                        <button id="suggest-sr-button" class="small-button" title="Suggest SR based on your goals and play history">Suggest</button>
+                    </div>
                 </div>
                 <div class="control-group">
                     <label for="max-bpm">Target Max BPM</label>
@@ -100,6 +104,7 @@ export function createRecommenderView() {
 	// --- Element Query Selectors ---
 	const findButton = view.querySelector('#find-map-button');
 	const srInput = view.querySelector('#target-sr');
+	const suggestSrButton = view.querySelector('#suggest-sr-button');
 	const bpmInput = view.querySelector('#max-bpm');
 	const bpmHelperText = view.querySelector('.bpm-helper-text');
 	const resultContainer = view.querySelector('#recommender-result');
@@ -192,6 +197,39 @@ export function createRecommenderView() {
 			updateBpmHelper();
 		});
 		modContainer.appendChild(button);
+	});
+
+	suggestSrButton.addEventListener('click', async () => {
+		const playerName = document.getElementById('player-selector')?.value;
+		if (!playerName) {
+			statusMessage.textContent = 'Please select a player first.';
+			return;
+		}
+
+		const mods = getIntFromMods(Array.from(activeMods));
+		const params = {
+			mods: mods,
+			min_acc: goalAccInput.value,
+			min_score: goalScoreInput.value,
+			max_misses: goalMissesInput.value
+		};
+
+		suggestSrButton.disabled = true;
+		suggestSrButton.textContent = '...';
+		statusMessage.textContent = 'Analyzing plays...';
+
+		try {
+			const result = await getSuggestedSr(playerName, params);
+			const suggestedSr = result.suggested_sr;
+			srInput.value = suggestedSr.toFixed(1);
+			localStorage.setItem('recommender_sr', srInput.value);
+			statusMessage.textContent = `Suggestion based on ${result.plays_considered} plays: ${suggestedSr.toFixed(2)} ★`;
+		} catch (error) {
+			statusMessage.textContent = `Error: ${error.message}`;
+		} finally {
+			suggestSrButton.disabled = false;
+			suggestSrButton.textContent = 'Suggest';
+		}
 	});
 
 	srInput.addEventListener('change', () => localStorage.setItem('recommender_sr', srInput.value));
