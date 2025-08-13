@@ -196,13 +196,17 @@ def suggest_sr(player_name):
     
     valid_plays = []
     SCORE_V2_MOD = 536870912
+    # Mask for all mods that fundamentally alter gameplay difficulty
+    CORE_MOD_MASK = 2 | 8 | 16 | 64 | 256 | 1024 # EZ, HD, HR, DT, HT, FL
 
     for r in replays:
         if r.get('stars') is None or r.get('game_mode') != 0:
             continue
             
-        # Check if the play's mods are a superset of the required mods
-        if (r.get('mods_used', 0) & mods) != mods:
+        # Exact match for core difficulty mods, ignoring others like NF or V2
+        replay_core_mods = r.get('mods_used', 0) & CORE_MOD_MASK
+        request_core_mods = mods & CORE_MOD_MASK
+        if replay_core_mods != request_core_mods:
             continue
             
         if min_acc is not None:
