@@ -1,6 +1,15 @@
-import { getRecommendation } from '../services/api.js';
+import { getRecommendation, getLatestReplay, scanReplays, getProgressStatus } from '../services/api.js';
 import { createBeatmapCard } from '../components/BeatmapCard.js';
 import { getIntFromMods } from '../utils/mods.js';
+
+let progressInterval = null;
+
+function stopProgressPolling() {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+    }
+}
 
 export function createRecommenderView() {
     const view = document.createElement('div');
@@ -31,9 +40,16 @@ export function createRecommenderView() {
             <p>Select your mods, set your target SR and max BPM, then click "Find a map".</p>
         </div>
         <div id="recommender-feedback" class="recommender-feedback">
-            <button id="passed-button">Passed Goal</button>
-            <button id="failed-button">Failed Goal</button>
-            <button id="skip-button">Skip Map</button>
+            <div class="recommender-feedback-buttons">
+                <button id="passed-button">Passed Goal</button>
+                <button id="failed-button">Failed Goal</button>
+                <button id="skip-button">Skip Map</button>
+            </div>
+            <button id="check-play-button">Check for New Play</button>
+            <div class="progress-container" id="scan-progress-container">
+                <progress id="scan-progress" class="progress-bar" value="0" max="100"></progress>
+                <span id="scan-progress-text" class="progress-text"></span>
+            </div>
         </div>
     `;
 
@@ -46,8 +62,13 @@ export function createRecommenderView() {
     const passedButton = view.querySelector('#passed-button');
     const failedButton = view.querySelector('#failed-button');
     const skipButton = view.querySelector('#skip-button');
+    const checkPlayButton = view.querySelector('#check-play-button');
     const modContainer = view.querySelector('.mod-selection-container');
     const statusMessage = document.getElementById('status-message');
+    
+    const scanProgressContainer = view.querySelector('#scan-progress-container');
+    const scanProgressBar = view.querySelector('#scan-progress');
+    const scanProgressText = view.querySelector('#scan-progress-text');
 
     const activeMods = new Set();
     const trainingMods = ['EZ', 'HD', 'HR', 'DT', 'HT', 'FL'];
@@ -55,14 +76,24 @@ export function createRecommenderView() {
     let rerollCount = 0;
     let lastSearchParams = null;
     let excludedBeatmapIds = [];
+    let currentRecommendation = null;
     const MAX_REROLLS = 3;
+
+    const setFeedbackButtonsDisabled = (disabled) => {
+        passedButton.disabled = disabled;
+        failedButton.disabled = disabled;
+        skipButton.disabled = disabled;
+        checkPlayButton.disabled = disabled;
+    };
 
     const resetSession = () => {
         rerollCount = 0;
         excludedBeatmapIds = [];
         lastSearchParams = null;
+        currentRecommendation = null;
         findButton.textContent = 'Find a map';
         findButton.disabled = false;
+        stopProgressPolling();
     };
 
     const updateBpmHelper = () => {
@@ -119,6 +150,7 @@ export function createRecommenderView() {
     const resetView = () => {
         resultContainer.innerHTML = '<p>Set your target SR and max BPM, then click "Find a map".</p>';
         feedbackContainer.style.display = 'none';
+        scanProgressContainer.style.display = 'none';
         resetSession();
         statusMessage.textContent = 'Ready to find a map.';
     };
@@ -156,6 +188,7 @@ export function createRecommenderView() {
             const beatmap = await getRecommendation(sr, bpm, mods, excludedBeatmapIds);
             if (beatmap) {
                 excludedBeatmapIds.push(beatmap.md5_hash);
+                currentRecommendation = { md5_hash: beatmap.md5_hash, mods: mods };
                 const card = createBeatmapCard(beatmap);
                 resultContainer.innerHTML = '';
                 resultContainer.appendChild(card);
@@ -165,8 +198,8 @@ export function createRecommenderView() {
             } else {
                 resultContainer.innerHTML = `<p>No new map found matching your criteria. Try adjusting the values.</p>`;
                 statusMessage.textContent = 'No new map found.';
-                findButton.textContent = 'Find a map'; // Allow changing params
-                lastSearchParams = null; // Force reset on next click
+                findButton.textContent = 'Find a map';
+                lastSearchParams = null;
             }
         } catch (error) {
             console.error(error);
@@ -174,19 +207,21 @@ export function createRecommenderView() {
             statusMessage.textContent = 'Error finding map.';
         } finally {
             findButton.disabled = (rerollCount + 1 >= MAX_REROLLS);
+            setFeedbackButtonsDisabled(false);
         }
     });
 
-    passedButton.addEventListener('click', () => {
+    const handlePassed = () => {
         const currentSr = parseFloat(srInput.value);
         const newSr = (currentSr + 0.1).toFixed(1);
         srInput.value = newSr;
         localStorage.setItem('recommender_sr', newSr);
-        statusMessage.textContent = `SR increased to ${srInput.value}!`;
+        statusMessage.textContent = `Goal Passed! SR increased to ${srInput.value}!`;
         resetView();
-    });
+    };
+    passedButton.addEventListener('click', handlePassed);
 
-    const decrementSrAndReset = () => {
+    const handleFailed = () => {
         const currentSr = parseFloat(srInput.value);
         const newSr = (currentSr - 0.1).toFixed(1);
         srInput.value = newSr;
@@ -194,9 +229,80 @@ export function createRecommenderView() {
         statusMessage.textContent = `SR decreased to ${srInput.value}. Try again.`;
         resetView();
     };
+    failedButton.addEventListener('click', handleFailed);
+    skipButton.addEventListener('click', handleFailed);
 
-    failedButton.addEventListener('click', decrementSrAndReset);
-    skipButton.addEventListener('click', decrementSrAndReset);
+    const pollScanProgress = (playerName) => {
+        stopProgressPolling();
+        progressInterval = setInterval(async () => {
+            try {
+                const progress = await getProgressStatus();
+                if (progress.scan.status === 'running') {
+                    scanProgressBar.value = progress.scan.current;
+                    scanProgressBar.max = progress.scan.total || 100;
+                    scanProgressText.textContent = `${progress.scan.message} (${progress.scan.current} / ${progress.scan.total || '?'})`;
+                } else {
+                    stopProgressPolling();
+                    scanProgressContainer.style.display = 'none';
+                    if (progress.scan.status === 'complete') {
+                        statusMessage.textContent = 'Scan complete. Checking latest play...';
+                        const latestReplay = await getLatestReplay(playerName);
+                        
+                        // Check if the latest play is the one we recommended
+                        if (latestReplay && latestReplay.beatmap_md5 === currentRecommendation.md5_hash) {
+                            const playMods = latestReplay.mods_used;
+                            const sessionMods = currentRecommendation.mods;
+                            const playModsWithoutNF = playMods & ~1; // Bitwise NOT on 1 to create a mask that removes the NF bit
+
+                            if (playModsWithoutNF === sessionMods) {
+                                // For now, any valid detected play is a "pass"
+                                statusMessage.textContent = 'New play detected and validated! Goal passed.';
+                                handlePassed();
+                            } else {
+                                statusMessage.textContent = `Play detected, but mods don't match session. (Played with ${playMods}, expected ${sessionMods})`;
+                                setFeedbackButtonsDisabled(false);
+                            }
+                        } else {
+                            statusMessage.textContent = 'No new play found for the recommended map.';
+                            setFeedbackButtonsDisabled(false);
+                        }
+                    } else {
+                        statusMessage.textContent = `Scan failed: ${progress.scan.message}`;
+                        setFeedbackButtonsDisabled(false);
+                    }
+                }
+            } catch(e) {
+                stopProgressPolling();
+                scanProgressContainer.style.display = 'none';
+                statusMessage.textContent = `Error checking progress: ${e.message}`;
+                setFeedbackButtonsDisabled(false);
+            }
+        }, 500);
+    };
+
+    checkPlayButton.addEventListener('click', async () => {
+        const playerSelector = document.getElementById('player-selector');
+        const playerName = playerSelector ? playerSelector.value : null;
+
+        if (!playerName) {
+            statusMessage.textContent = 'Please select a player from the sidebar first.';
+            return;
+        }
+        
+        setFeedbackButtonsDisabled(true);
+        scanProgressContainer.style.display = 'block';
+        scanProgressBar.value = 0;
+        scanProgressText.textContent = 'Starting scan...';
+
+        try {
+            await scanReplays();
+            pollScanProgress(playerName);
+        } catch (error) {
+            statusMessage.textContent = `Error starting scan: ${error.message}`;
+            setFeedbackButtonsDisabled(false);
+            scanProgressContainer.style.display = 'none';
+        }
+    });
 
     return view;
 }
