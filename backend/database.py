@@ -29,6 +29,12 @@ def init_db():
         if 'bpm_max' not in replay_columns:
             logging.info("Applying migration: Adding 'bpm_max' to 'replays' table.")
             cursor.execute("ALTER TABLE replays ADD COLUMN bpm_max REAL")
+        if 'aim' not in replay_columns:
+            logging.info("Applying migration: Adding 'aim' to 'replays' table.")
+            cursor.execute("ALTER TABLE replays ADD COLUMN aim REAL")
+        if 'speed' not in replay_columns:
+            logging.info("Applying migration: Adding 'speed' to 'replays' table.")
+            cursor.execute("ALTER TABLE replays ADD COLUMN speed REAL")
 
         # --- Migration for beatmaps table ---
         cursor.execute("PRAGMA table_info(beatmaps)")
@@ -75,6 +81,8 @@ def init_db():
             mods_used INTEGER,
             pp REAL,
             stars REAL,
+            aim REAL,
+            speed REAL,
             map_max_combo INTEGER,
             bpm REAL,
             played_at TEXT,
@@ -158,6 +166,8 @@ def add_replay(replay_data):
         'mods_used': replay_data.get('mods_used'),
         'pp': replay_data.get('pp'),
         'stars': replay_data.get('stars'),
+        'aim': replay_data.get('aim'),
+        'speed': replay_data.get('speed'),
         'map_max_combo': replay_data.get('map_max_combo'),
         'bpm': replay_data.get('bpm'),
         'bpm_min': replay_data.get('bpm_min'),
@@ -169,17 +179,19 @@ def add_replay(replay_data):
         INSERT INTO replays (
             game_mode, game_version, beatmap_md5, player_name, replay_md5,
             num_300s, num_100s, num_50s, num_gekis, num_katus, num_misses,
-            total_score, max_combo, mods_used, pp, stars, map_max_combo, 
+            total_score, max_combo, mods_used, pp, stars, aim, speed, map_max_combo, 
             bpm, bpm_min, bpm_max, played_at
         ) VALUES (
             :game_mode, :game_version, :beatmap_md5, :player_name, :replay_md5,
             :num_300s, :num_100s, :num_50s, :num_gekis, :num_katus, :num_misses,
-            :total_score, :max_combo, :mods_used, :pp, :stars, :map_max_combo, 
+            :total_score, :max_combo, :mods_used, :pp, :stars, :aim, :speed, :map_max_combo, 
             :bpm, :bpm_min, :bpm_max, :played_at
         )
         ON CONFLICT(replay_md5) DO UPDATE SET
             pp = excluded.pp,
             stars = excluded.stars,
+            aim = excluded.aim,
+            speed = excluded.speed,
             map_max_combo = excluded.map_max_combo,
             bpm = excluded.bpm,
             bpm_min = excluded.bpm_min,
@@ -396,7 +408,7 @@ def update_beatmap_details(md5_hash, details):
     conn.commit()
     conn.close()
     
-def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[]):
+def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[], focus=None):
     """
     Finds a single, random osu! standard beatmap matching the criteria
     by using a pre-calculated cache of modded difficulties.
@@ -405,8 +417,6 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[]):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Determine the primary difficulty-altering mod to query the cache
-    # Order of precedence: DT > HT > HR > EZ
     base_mod = 0
     if (mods & 64): base_mod = 64      # DoubleTime
     elif (mods & 256): base_mod = 256   # HalfTime
@@ -414,10 +424,16 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[]):
     elif (mods & 2): base_mod = 2       # Easy
     
     sr_lower_bound = target_sr
-    sr_upper_bound = target_sr + 0.15 # Widen range slightly for more results
+    sr_upper_bound = target_sr + 0.15
 
     if base_mod != 0:
-        # Query the cache for maps with the primary mod
+        params = [base_mod, sr_lower_bound, sr_upper_bound, max_bpm]
+        focus_clause = ""
+        if focus == 'aim':
+            focus_clause = " AND c.aim > c.speed "
+        elif focus == 'speed':
+            focus_clause = " AND c.speed > c.aim "
+
         exclude_placeholders = '?' * len(excluded_ids)
         query = f"""
             SELECT b.*
@@ -427,16 +443,16 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[]):
               AND c.stars >= ? AND c.stars < ?
               AND c.bpm <= ?
               AND b.game_mode = 0
+              {focus_clause}
               {f"AND b.md5_hash NOT IN ({','.join(exclude_placeholders)})" if excluded_ids else ""}
             ORDER BY RANDOM()
             LIMIT 1
         """
-        params = [base_mod, sr_lower_bound, sr_upper_bound, max_bpm] + excluded_ids
+        params.extend(excluded_ids)
         logging.debug(f"Recommendation query (cached): {query} with params {params}")
         cursor.execute(query, params)
         row = cursor.fetchone()
     else:
-        # No difficulty-altering mods, query the main beatmaps table
         exclude_placeholders = '?' * len(excluded_ids)
         query = f"""
             SELECT * FROM beatmaps
@@ -462,7 +478,7 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[]):
     osu_folder = os.getenv('OSU_FOLDER')
     if not osu_folder:
         logging.error("OSU_FOLDER not set, cannot find .osu file for final calculation.")
-        return beatmap # Return with possibly stale data if path fails
+        return beatmap
 
     songs_path = os.path.join(osu_folder, 'Songs')
     osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
@@ -472,8 +488,6 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[]):
         return beatmap
 
     try:
-        # Recalculate with the *full* mod combination to get the most accurate, final stats.
-        # This handles cases like HDHR, where the cache was queried on HR but we need HD's effect too.
         rosu_map = rosu_pp_py.Beatmap(path=osu_file_path)
         diff_calc = rosu_pp_py.Difficulty(mods=mods)
         diff_attrs = diff_calc.calculate(rosu_map)
@@ -494,7 +508,6 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[]):
     except Exception as e:
         logging.error(f"Could not perform final calculation for {osu_file_path} with mods {mods}: {e}", exc_info=False)
         return beatmap
-
 
 def update_replay_pp(replay_md5, pp, stars, map_max_combo):
     """Updates the pp, stars, and map_max_combo for an existing replay record."""
@@ -519,6 +532,4 @@ def update_replay_bpm(replay_md5, bpm, bpm_min, bpm_max):
     conn.close()
 
 if __name__ == '__main__':
-    # This will run only when you execute `python backend/database.py` directly.
-    # It sets up the database file and the table.
     init_db()
