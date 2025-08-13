@@ -271,3 +271,16 @@ input:checked + .slider:before {
 .slider.round:before {
     border-radius: 50%;
 }
+
+/* Analytics section */
+#profile-analytics {
+    margin-top: 20px;
+    background-color: #222;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #333;
+}
+#profile-analytics .stat-item {
+    background: none;
+    border: none;
+}
