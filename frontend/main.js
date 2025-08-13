@@ -3,6 +3,7 @@ import { createScoresView, loadScores } from './views/ScoresView.js';
 import { createProfileView, loadProfile } from './views/ProfileView.js';
 import { createBeatmapsView, loadBeatmaps } from './views/BeatmapsView.js';
 import { createConfigView } from './views/ConfigView.js';
+import { createRecommenderView } from './views/RecommenderView.js';
 import { stopAudio } from './utils/audioPlayer.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -16,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
         scores: createScoresView(),
         profile: createProfileView(),
         beatmaps: createBeatmapsView(),
+        recommender: createRecommenderView(),
         config: createConfigView(),
     };
     
@@ -67,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (viewName === 'scores') loadScores(view);
             else if (viewName === 'profile') loadProfile(view, currentPlayer);
             else if (viewName === 'beatmaps') loadBeatmaps(view);
-            // Config view requires no data loading
+            // Config and Recommender views require no initial data loading
         }
         if (link) {
             link.classList.add('active');
@@ -115,7 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     case 'beatmaps':
                         loadBeatmaps(view);
                         break;
-                    // No action needed for 'config' view itself
                 }
             }
         }
