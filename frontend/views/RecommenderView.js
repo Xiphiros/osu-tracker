@@ -33,6 +33,7 @@ export function createRecommenderView() {
         <div id="recommender-feedback" class="recommender-feedback">
             <button id="passed-button">Passed Goal</button>
             <button id="failed-button">Failed Goal</button>
+            <button id="skip-button">Skip Map</button>
         </div>
     `;
 
@@ -44,6 +45,7 @@ export function createRecommenderView() {
     const feedbackContainer = view.querySelector('#recommender-feedback');
     const passedButton = view.querySelector('#passed-button');
     const failedButton = view.querySelector('#failed-button');
+    const skipButton = view.querySelector('#skip-button');
     const modContainer = view.querySelector('.mod-selection-container');
     const statusMessage = document.getElementById('status-message');
 
@@ -184,14 +186,17 @@ export function createRecommenderView() {
         resetView();
     });
 
-    failedButton.addEventListener('click', () => {
+    const decrementSrAndReset = () => {
         const currentSr = parseFloat(srInput.value);
         const newSr = (currentSr - 0.1).toFixed(1);
         srInput.value = newSr;
         localStorage.setItem('recommender_sr', newSr);
-        statusMessage.textContent = `SR decreased to ${srInput.value}.`;
+        statusMessage.textContent = `SR decreased to ${srInput.value}. Try again.`;
         resetView();
-    });
+    };
+
+    failedButton.addEventListener('click', decrementSrAndReset);
+    skipButton.addEventListener('click', decrementSrAndReset);
 
     return view;
 }
