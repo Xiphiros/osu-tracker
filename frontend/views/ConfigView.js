@@ -1,13 +1,40 @@
 import { syncBeatmaps, scanReplays, getProgressStatus, getConfig, saveConfig, getPlayers } from '../services/api.js';
 
-let progressInterval = null;
-let lastSyncStatus = 'idle';
-let lastScanStatus = 'idle';
+let viewElement = null;
+let isViewActive = false;
 
-function stopProgressPolling() {
-    if (progressInterval) {
-        clearInterval(progressInterval);
-        progressInterval = null;
+function handleProgressUpdate(progress) {
+    if (!viewElement || !isViewActive) return;
+
+    const syncProgressContainer = viewElement.querySelector('#sync-progress-container');
+    const syncProgressBar = viewElement.querySelector('#sync-progress');
+    const syncProgressText = viewElement.querySelector('#sync-progress-text');
+    
+    const scanProgressContainer = viewElement.querySelector('#scan-progress-container');
+    const scanProgressBar = viewElement.querySelector('#scan-progress');
+    const scanProgressText = viewElement.querySelector('#scan-progress-text');
+
+    const syncData = progress.sync;
+    const scanData = progress.scan;
+
+    // Update Sync Progress UI
+    if (syncData.status === 'running') {
+        syncProgressContainer.style.display = 'block';
+        syncProgressBar.value = syncData.current;
+        syncProgressBar.max = syncData.total || 100;
+        syncProgressText.textContent = `${syncData.message} (${syncData.current} / ${syncData.total || '?'})`;
+    } else {
+        syncProgressContainer.style.display = 'none';
+    }
+
+    // Update Scan Progress UI
+    if (scanData.status === 'running') {
+        scanProgressContainer.style.display = 'block';
+        scanProgressBar.value = scanData.current;
+        scanProgressBar.max = scanData.total || 100;
+        scanProgressText.textContent = `${scanData.message} (${scanData.current} / ${scanData.total || '?'})`;
+    } else {
+        scanProgressContainer.style.display = 'none';
     }
 }
 
@@ -39,6 +66,7 @@ export function createConfigView() {
     const view = document.createElement('div');
     view.id = 'config-view';
     view.className = 'view';
+    viewElement = view;
 
     view.innerHTML = `
         <h2>Configuration & Maintenance</h2>
@@ -80,11 +108,40 @@ export function createConfigView() {
         </div>
     `;
 
-    // Attach event listeners after innerHTML is set
-    view.addEventListener('viewactivated', () => loadConfigData(view));
+    document.addEventListener('progressupdated', (e) => {
+        handleProgressUpdate(e.detail);
+        
+        // Also update button states based on global progress
+        const { sync, scan } = e.detail;
+        const isTaskRunning = sync.status === 'running' || scan.status === 'running';
+        view.querySelector('#sync-beatmaps-button').disabled = isTaskRunning;
+        view.querySelector('#scan-replays-button-config').disabled = isTaskRunning;
+        view.querySelector('#save-config-button').disabled = isTaskRunning;
+    });
+
+    view.addEventListener('viewactivated', async () => {
+        isViewActive = true;
+        loadConfigData(view);
+        try {
+            const progress = await getProgressStatus();
+            handleProgressUpdate(progress);
+        } catch(e) {
+            console.error("Could not get initial progress for config view", e);
+        }
+    });
+    
+    view.addEventListener('viewdeactivated', () => {
+        isViewActive = false;
+    });
     
     const saveButton = view.querySelector('#save-config-button');
     const statusMessage = view.querySelector('#config-status-message');
+
+    const setStatus = (message, type = 'info') => {
+        statusMessage.textContent = message;
+        statusMessage.style.display = 'block';
+        statusMessage.className = type;
+    };
 
     saveButton.addEventListener('click', async () => {
         const osuFolder = view.querySelector('#osu-folder-input').value;
@@ -95,12 +152,8 @@ export function createConfigView() {
         statusMessage.style.display = 'none';
 
         try {
-            await saveConfig({
-                "osu_folder": osuFolder,
-                "default_player": defaultPlayer
-            });
+            await saveConfig({ "osu_folder": osuFolder, "default_player": defaultPlayer });
             setStatus('Settings saved successfully!', 'success');
-            // Notify other parts of the app that data (like default player) might have changed
             view.dispatchEvent(new CustomEvent('datachanged', { bubbles: true }));
         } catch (error) {
             setStatus(`Error saving settings: ${error.message}`, 'error');
@@ -113,114 +166,23 @@ export function createConfigView() {
     const syncButton = view.querySelector('#sync-beatmaps-button');
     const scanButton = view.querySelector('#scan-replays-button-config');
 
-    const syncProgressContainer = view.querySelector('#sync-progress-container');
-    const syncProgressBar = view.querySelector('#sync-progress');
-    const syncProgressText = view.querySelector('#sync-progress-text');
-
-    const scanProgressContainer = view.querySelector('#scan-progress-container');
-    const scanProgressBar = view.querySelector('#scan-progress');
-    const scanProgressText = view.querySelector('#scan-progress-text');
-    
-    const setButtonsDisabled = (disabled) => {
-        syncButton.disabled = disabled;
-        scanButton.disabled = disabled;
-        saveButton.disabled = disabled;
-    };
-
-    const setStatus = (message, type = 'info') => {
-        statusMessage.textContent = message;
-        statusMessage.style.display = 'block';
-        statusMessage.className = type;
-    };
-
-    const startPolling = () => {
-        stopProgressPolling();
-        lastSyncStatus = 'running';
-        lastScanStatus = 'running';
-        
-        progressInterval = setInterval(async () => {
-            try {
-                const progress = await getProgressStatus();
-                const syncData = progress.sync;
-                const scanData = progress.scan;
-
-                if (syncData.status === 'running') {
-                    syncProgressContainer.style.display = 'block';
-                    syncProgressBar.value = syncData.current;
-                    syncProgressBar.max = syncData.total || 100;
-                    syncProgressText.textContent = `${syncData.message} (${syncData.current} / ${syncData.total || '?'})`;
-                }
-
-                if (syncData.status !== 'running' && lastSyncStatus === 'running') {
-                    syncProgressContainer.style.display = 'none';
-                    setStatus(syncData.message, syncData.status === 'complete' ? 'success' : 'error');
-                    if(syncData.status === 'complete') {
-                        view.dispatchEvent(new CustomEvent('datachanged', { bubbles: true }));
-                    }
-                }
-                
-                if (scanData.status === 'running') {
-                    scanProgressContainer.style.display = 'block';
-                    scanProgressBar.value = scanData.current;
-                    scanProgressBar.max = scanData.total || 100;
-                    scanProgressText.textContent = `${scanData.message} (${scanData.current} / ${scanData.total || '?'})`;
-                }
-
-                if (scanData.status !== 'running' && lastScanStatus === 'running') {
-                    scanProgressContainer.style.display = 'none';
-                    setStatus(scanData.message, scanData.status === 'complete' ? 'success' : 'error');
-                    if(scanData.status === 'complete') {
-                        view.dispatchEvent(new CustomEvent('datachanged', { bubbles: true }));
-                    }
-                }
-
-                lastSyncStatus = syncData.status;
-                lastScanStatus = scanData.status;
-
-                if (syncData.status !== 'running' && scanData.status !== 'running') {
-                    stopProgressPolling();
-                    setButtonsDisabled(false);
-                }
-
-            } catch (error) {
-                setStatus('Could not retrieve progress. Connection lost.', 'error');
-                stopProgressPolling();
-                setButtonsDisabled(false);
-            }
-        }, 500);
-    };
-
     syncButton.addEventListener('click', async () => {
         statusMessage.style.display = 'none';
-        setButtonsDisabled(true);
-        syncProgressContainer.style.display = 'block';
-        syncProgressBar.value = 0;
-        syncProgressText.textContent = 'Starting sync...';
-        lastSyncStatus = 'idle';
-
         try {
             await syncBeatmaps();
-            startPolling();
+            view.dispatchEvent(new CustomEvent('taskstarted', { bubbles: true }));
         } catch (error) {
             setStatus(`Error starting sync: ${error.message}`, 'error');
-            setButtonsDisabled(false);
         }
     });
 
     scanButton.addEventListener('click', async () => {
         statusMessage.style.display = 'none';
-        setButtonsDisabled(true);
-        scanProgressContainer.style.display = 'block';
-        scanProgressBar.value = 0;
-        scanProgressText.textContent = 'Starting scan...';
-        lastScanStatus = 'idle';
-
         try {
             await scanReplays();
-            startPolling();
+            view.dispatchEvent(new CustomEvent('taskstarted', { bubbles: true }));
         } catch (error) {
             setStatus(`Error starting scan: ${error.message}`, 'error');
-            setButtonsDisabled(false);
         }
     });
 
