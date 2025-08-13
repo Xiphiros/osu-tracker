@@ -1,18 +1,19 @@
 import { getRecommendation } from '../services/api.js';
 import { createBeatmapCard } from '../components/BeatmapCard.js';
+import { getIntFromMods } from '../utils/mods.js';
 
 export function createRecommenderView() {
     const view = document.createElement('div');
     view.id = 'recommender-view';
     view.className = 'view';
 
-    // Load saved values from localStorage, with defaults
     const savedSr = localStorage.getItem('recommender_sr') || '5.5';
     const savedBpm = localStorage.getItem('recommender_bpm') || '200';
 
     view.innerHTML = `
         <h2>Training Recommender</h2>
         <div class="recommender-controls">
+            <div class="mod-selection-container"></div>
             <div class="control-group">
                 <label for="target-sr">Target Star Rating</label>
                 <input type="number" id="target-sr" value="${savedSr}" step="0.1" min="1">
@@ -24,7 +25,7 @@ export function createRecommenderView() {
             <button id="find-map-button">Find a map</button>
         </div>
         <div id="recommender-result">
-            <p>Set your target SR and max BPM, then click "Find a map".</p>
+            <p>Select your mods, set your target SR and max BPM, then click "Find a map".</p>
         </div>
         <div id="recommender-feedback" class="recommender-feedback">
             <button id="passed-button">Passed Goal</button>
@@ -39,16 +40,41 @@ export function createRecommenderView() {
     const feedbackContainer = view.querySelector('#recommender-feedback');
     const passedButton = view.querySelector('#passed-button');
     const failedButton = view.querySelector('#failed-button');
+    const modContainer = view.querySelector('.mod-selection-container');
     const statusMessage = document.getElementById('status-message');
 
-    // --- Event Listeners to save values on change ---
-    srInput.addEventListener('change', () => {
-        localStorage.setItem('recommender_sr', srInput.value);
+    const activeMods = new Set();
+    const trainingMods = ['EZ', 'HD', 'HR', 'DT', 'FL'];
+
+    trainingMods.forEach(mod => {
+        const button = document.createElement('button');
+        button.className = 'mod-button';
+        button.textContent = mod;
+        button.dataset.mod = mod;
+        button.addEventListener('click', () => {
+            const deactivate = (modToDeactivate) => {
+                if (activeMods.has(modToDeactivate)) {
+                    activeMods.delete(modToDeactivate);
+                    modContainer.querySelector(`[data-mod="${modToDeactivate}"]`).classList.remove('active');
+                }
+            };
+
+            if (!activeMods.has(mod)) { // Activating a new mod
+                if (mod === 'DT') deactivate('HR');
+                if (mod === 'HR') { deactivate('DT'); deactivate('EZ'); }
+                if (mod === 'EZ') deactivate('HR');
+                activeMods.add(mod);
+                button.classList.add('active');
+            } else { // Deactivating an active mod
+                activeMods.delete(mod);
+                button.classList.remove('active');
+            }
+        });
+        modContainer.appendChild(button);
     });
-    bpmInput.addEventListener('change', () => {
-        localStorage.setItem('recommender_bpm', bpmInput.value);
-    });
-    // ---
+
+    srInput.addEventListener('change', () => localStorage.setItem('recommender_sr', srInput.value));
+    bpmInput.addEventListener('change', () => localStorage.setItem('recommender_bpm', bpmInput.value));
 
     const resetView = () => {
         resultContainer.innerHTML = '<p>Set your target SR and max BPM, then click "Find a map".</p>';
@@ -60,6 +86,7 @@ export function createRecommenderView() {
     findButton.addEventListener('click', async () => {
         const sr = parseFloat(srInput.value);
         const bpm = parseInt(bpmInput.value, 10);
+        const mods = getIntFromMods(Array.from(activeMods));
 
         if (isNaN(sr) || isNaN(bpm)) {
             statusMessage.textContent = "Please enter valid SR and BPM values.";
@@ -67,12 +94,12 @@ export function createRecommenderView() {
         }
 
         findButton.disabled = true;
-        statusMessage.textContent = `Searching for a map between ${sr.toFixed(2)} and ${(sr + 0.1).toFixed(2)} stars, under ${bpm} BPM...`;
+        statusMessage.textContent = `Searching for a map...`;
         resultContainer.innerHTML = '<p>Searching...</p>';
         feedbackContainer.style.display = 'none';
 
         try {
-            const beatmap = await getRecommendation(sr, bpm);
+            const beatmap = await getRecommendation(sr, bpm, mods);
             if (beatmap) {
                 const card = createBeatmapCard(beatmap);
                 resultContainer.innerHTML = '';
@@ -96,7 +123,7 @@ export function createRecommenderView() {
         const currentSr = parseFloat(srInput.value);
         const newSr = (currentSr + 0.1).toFixed(1);
         srInput.value = newSr;
-        localStorage.setItem('recommender_sr', newSr); // Save new value
+        localStorage.setItem('recommender_sr', newSr);
         statusMessage.textContent = `SR increased to ${srInput.value}!`;
         resetView();
     });
@@ -105,11 +132,10 @@ export function createRecommenderView() {
         const currentSr = parseFloat(srInput.value);
         const newSr = (currentSr - 0.1).toFixed(1);
         srInput.value = newSr;
-        localStorage.setItem('recommender_sr', newSr); // Save new value
+        localStorage.setItem('recommender_sr', newSr);
         statusMessage.textContent = `SR decreased to ${srInput.value}.`;
         resetView();
     });
-
 
     return view;
 }
