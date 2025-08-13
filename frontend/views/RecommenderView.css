@@ -155,3 +155,11 @@
 #failed-button:hover {
     background-color: #c82333;
 }
+
+#skip-button {
+    background-color: #6c757d;
+    color: white;
+}
+#skip-button:hover {
+    background-color: #5a6268;
+}
