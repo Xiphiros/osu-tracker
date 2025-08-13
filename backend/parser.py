@@ -273,6 +273,25 @@ def parse_osu_file(file_path):
     logging.debug(f"Parser result for {os.path.basename(file_path)}: {data}")
     return data
 
+def calculate_difficulty(osu_file_path):
+    """Calculates NoMod difficulty attributes (e.g., stars) for a beatmap."""
+    try:
+        beatmap = rosu_pp_py.Beatmap(path=osu_file_path)
+        
+        # No mods are applied, so mods=0.
+        diff_calc = rosu_pp_py.Difficulty(mods=0)
+        diff_attrs = diff_calc.calculate(beatmap)
+        
+        diff_data = {
+            "stars": diff_attrs.stars,
+        }
+        logging.debug(f"Calculated difficulty for {os.path.basename(osu_file_path)}: {diff_data}")
+        return diff_data
+    except Exception as e:
+        # Return default values if calculation fails for any reason
+        logging.error(f"Could not calculate difficulty for {osu_file_path}: {e}", exc_info=True)
+        return {"stars": None}
+
 def calculate_pp(osu_file_path, replay_data):
     """Calculates PP and star rating for a given play using rosu-pp-py."""
     try:
