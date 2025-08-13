@@ -17,18 +17,20 @@ TASK_PROGRESS = {
 def process_osu_file_and_cache(osu_file_path, base_bpm, md5):
     """Helper function to parse a .osu file and pre-calculate modded difficulties."""
     try:
+        # Get file-based details like audio/bg filenames and detailed BPM
         details = parser.parse_osu_file(osu_file_path)
         if details.get('bpm'):
             base_bpm = details['bpm']
 
-        rosu_map = rosu_pp_py.Beatmap(path=osu_file_path)
-        
-        nomod_diff_attrs = rosu_pp_py.Difficulty().calculate(rosu_map)
-        details['stars'] = nomod_diff_attrs.stars
+        # Get NoMod difficulty attributes
+        nomod_attrs = parser.calculate_difficulty(osu_file_path, mods=0)
+        details.update(nomod_attrs)
         
         # Pre-calculate difficulty for common mod combinations
         mods_to_cache = [2, 16, 64, 256] # EZ, HR, DT, HT
         mod_cache_results = []
+
+        rosu_map = rosu_pp_py.Beatmap(path=osu_file_path)
 
         for mod_int in mods_to_cache:
             diff_calc = rosu_pp_py.Difficulty(mods=mod_int)
@@ -46,9 +48,13 @@ def process_osu_file_and_cache(osu_file_path, base_bpm, md5):
                 'cs': round(map_attrs.cs, 2),
                 'hp': round(map_attrs.hp, 2),
                 'bpm': round(base_bpm * map_attrs.clock_rate, 2),
-                'aim': round(diff_attrs.aim, 2),
-                'speed': round(diff_attrs.speed, 2),
-                'slider_factor': round(diff_attrs.slider_factor, 2),
+                'aim': round(diff_attrs.aim, 2) if diff_attrs.aim else None,
+                'speed': round(diff_attrs.speed, 2) if diff_attrs.speed else None,
+                'slider_factor': round(diff_attrs.slider_factor, 2) if diff_attrs.slider_factor else None,
+                'speed_note_count': round(diff_attrs.speed_note_count, 2) if diff_attrs.speed_note_count else None,
+                'aim_difficult_strain_count': round(diff_attrs.aim_difficult_strain_count, 2) if diff_attrs.aim_difficult_strain_count else None,
+                'speed_difficult_strain_count': round(diff_attrs.speed_difficult_strain_count, 2) if diff_attrs.speed_difficult_strain_count else None,
+                'aim_difficult_slider_count': round(diff_attrs.aim_difficult_slider_count, 2) if diff_attrs.aim_difficult_slider_count else None,
             })
 
         return md5, details, mod_cache_results
