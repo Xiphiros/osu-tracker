@@ -1,9 +1,9 @@
 const API_BASE_URL = '/api'; // Use a relative path
 
-export const getReplays = async (playerName = null) => {
-    let url = `${API_BASE_URL}/replays`;
+export const getReplays = async (playerName = null, page = 1, limit = 50) => {
+    let url = `${API_BASE_URL}/replays?page=${page}&limit=${limit}`;
     if (playerName) {
-        url += `?player_name=${encodeURIComponent(playerName)}`;
+        url += `&player_name=${encodeURIComponent(playerName)}`;
     }
     const response = await fetch(url);
     if (!response.ok) {
@@ -59,8 +59,8 @@ export const getSongFileUrl = (folderName, fileName) => {
     return `${API_BASE_URL}/songs/${encodeURIComponent(folderName)}/${encodeURIComponent(fileName)}`;
 };
 
-export const getBeatmaps = async () => {
-    const response = await fetch(`${API_BASE_URL}/beatmaps`);
+export const getBeatmaps = async (page = 1, limit = 50) => {
+    const response = await fetch(`${API_BASE_URL}/beatmaps?page=${page}&limit=${limit}`);
     if (!response.ok) {
         throw new Error('Failed to fetch beatmaps.');
     }
