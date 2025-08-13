@@ -340,7 +340,7 @@ def update_beatmap_details(md5_hash, details):
     conn.commit()
     conn.close()
     
-def get_recommendation(target_sr, max_bpm, mods):
+def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[]):
     """
     Finds a single, random osu! standard beatmap matching the criteria,
     calculating difficulty with mods on the fly.
@@ -349,8 +349,7 @@ def get_recommendation(target_sr, max_bpm, mods):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Mod constants for bitwise checks
-    mods_dt = (mods & 64) > 0 or (mods & 512) > 0  # DT or NC
+    mods_dt = (mods & 64) > 0 or (mods & 512) > 0
     mods_ht = (mods & 256) > 0
     mods_hr = (mods & 16) > 0
     mods_ez = (mods & 2) > 0
@@ -358,7 +357,6 @@ def get_recommendation(target_sr, max_bpm, mods):
     base_query = "SELECT * FROM beatmaps WHERE game_mode = 0 AND stars IS NOT NULL AND bpm IS NOT NULL"
     params = []
 
-    # Heuristics: Adjust SQL query to find a good pool of candidates.
     if mods_dt:
         base_query += " AND bpm <= ?"
         params.append(max_bpm / 1.5)
@@ -384,6 +382,11 @@ def get_recommendation(target_sr, max_bpm, mods):
         params.append(max_bpm)
         base_query += " AND stars >= ? AND stars < ?"
         params.extend([target_sr, target_sr + 0.1])
+
+    if excluded_ids:
+        placeholders = ','.join('?' for _ in excluded_ids)
+        base_query += f" AND md5_hash NOT IN ({placeholders})"
+        params.extend(excluded_ids)
 
     base_query += " ORDER BY RANDOM() LIMIT 100"
     
