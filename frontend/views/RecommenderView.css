@@ -145,11 +145,15 @@
 }
 
 .recommender-feedback {
-    display: none; /* Hidden by default */
+    display: none;
     flex-direction: column;
     align-items: center;
     gap: 20px;
     margin-top: 20px;
+    width: 100%;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .recommender-feedback-buttons {
@@ -168,19 +172,19 @@
     transition: background-color 0.2s;
 }
 
-#passed-button {
+#passed-button, #next-map-button.passed {
     background-color: #28a745;
     color: white;
 }
-#passed-button:hover {
+#passed-button:hover, #next-map-button.passed:hover {
     background-color: #218838;
 }
 
-#failed-button {
+#failed-button, #next-map-button.failed {
     background-color: #dc3545;
     color: white;
 }
-#failed-button:hover {
+#failed-button:hover, #next-map-button.failed:hover {
     background-color: #c82333;
 }
 
@@ -200,9 +204,28 @@
     background-color: #463265;
 }
 
-/* Inherits progress styles from config view */
 .recommender-feedback .progress-container {
     width: 100%;
     max-width: 600px;
     display: none;
+}
+
+#detection-result-container {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    width: 100%;
+    margin-top: 10px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+#detection-result-message {
+    font-size: 1.1em;
+    font-weight: 500;
+    text-align: center;
+}
+#detected-replay-card-container {
+    width: 100%;
+    max-width: 480px;
 }
