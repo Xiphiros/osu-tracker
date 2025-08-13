@@ -151,10 +151,7 @@ def parse_osu_db(db_path):
                     bpm = 60000.0 / beat_length
                     found_bpm = True
             
-            read_int(f) # difficulty_id
-            beatmap_id = read_int(f)
-            read_int(f) # thread_id
-            
+            f.seek(12, 1) # difficulty_id, beatmap_id, thread_id
             grades = {"osu": read_byte(f), "taiko": read_byte(f), "ctb": read_byte(f), "mania": read_byte(f)}
             f.seek(2, 1) # local_offset
             f.seek(4, 1) # stack_leniency
@@ -177,7 +174,6 @@ def parse_osu_db(db_path):
                     "artist": artist, "title": title, "creator": creator, "difficulty": difficulty,
                     "folder_name": folder_name, "osu_file_name": osu_file_name, "grades": grades,
                     "last_played_date": last_played_date, "game_mode": gameplay_mode,
-                    "beatmap_id": beatmap_id,
                     "num_hitcircles": num_hitcircles, "num_sliders": num_sliders, "num_spinners": num_spinners,
                     "ar": round(ar, 2), "cs": round(cs, 2), "hp": round(hp, 2), "od": round(od, 2), "bpm": round(bpm, 2)
                 }
