@@ -182,66 +182,68 @@ def add_replay(replay_data):
     conn.commit()
     conn.close()
 
-def get_all_replays(player_name=None, page=1, limit=50):
+def get_all_replays(player_name=None, page=1, limit=50, search_term=None):
     """
     Retrieves a paginated list of replay records, enriched with beatmap data.
+    Can be filtered by player name and a text search term.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    base_query = """
-        FROM replays r
-        LEFT JOIN beatmaps b ON r.beatmap_md5 = b.md5_hash
-    """
-    count_query = "SELECT COUNT(r.id) " + base_query
+    base_query = " FROM replays r LEFT JOIN beatmaps b ON r.beatmap_md5 = b.md5_hash "
+    where_clauses = []
+    params = []
+
+    if player_name:
+        where_clauses.append("r.player_name = ?")
+        params.append(player_name)
+
+    if search_term:
+        search_like = f"%{search_term}%"
+        where_clauses.append("(b.title LIKE ? OR b.artist LIKE ? OR b.creator LIKE ?)")
+        params.extend([search_like, search_like, search_like])
+
+    where_sql = ""
+    if where_clauses:
+        where_sql = " WHERE " + " AND ".join(where_clauses)
+    
+    count_query = "SELECT COUNT(r.id) " + base_query + where_sql
+    cursor.execute(count_query, params)
+    total = cursor.fetchone()[0]
+
     select_query = """
         SELECT
-            r.*,
-            b.artist, b.title, b.creator, b.difficulty, b.folder_name,
+            r.*, b.artist, b.title, b.creator, b.difficulty, b.folder_name,
             b.osu_file_name, b.grades, b.last_played_date, b.num_hitcircles,
             b.num_sliders, b.num_spinners, b.ar, b.cs, b.hp, b.od,
             b.audio_file, b.background_file,
             COALESCE(r.bpm, b.bpm) as bpm,
             COALESCE(r.bpm_min, b.bpm_min) as bpm_min,
             COALESCE(r.bpm_max, b.bpm_max) as bpm_max
-    """ + base_query
-
-    params = []
-    if player_name:
-        where_clause = " WHERE r.player_name = ?"
-        count_query += where_clause
-        select_query += where_clause
-        params.append(player_name)
+    """ + base_query + where_sql + " ORDER BY r.played_at DESC LIMIT ? OFFSET ?"
     
-    cursor.execute(count_query, params)
-    total = cursor.fetchone()[0]
-
-    select_query += " ORDER BY r.played_at DESC LIMIT ? OFFSET ?"
     offset = (page - 1) * limit
     params.extend([limit, offset])
     
     cursor.execute(select_query, params)
 
-    replays = []
-    for row in cursor.fetchall():
-        replay_dict = dict(row)
-        if row['artist'] is None:
-            replay_dict['beatmap'] = {}
-        else:
-            replay_dict['beatmap'] = {
-                'artist': row['artist'], 'title': row['title'], 'creator': row['creator'],
-                'difficulty': row['difficulty'], 'folder_name': row['folder_name'],
-                'osu_file_name': row['osu_file_name'], 'grades': row['grades'],
-                'last_played_date': row['last_played_date'], 'num_hitcircles': row['num_hitcircles'],
-                'num_sliders': row['num_sliders'], 'num_spinners': row['num_spinners'],
-                'ar': row['ar'], 'cs': row['cs'], 'hp': row['hp'], 'od': row['od'],
-                'bpm': row['bpm'], 'audio_file': row['audio_file'], 
-                'background_file': row['background_file'],
-                'bpm_min': row['bpm_min'], 'bpm_max': row['bpm_max']
-            }
-        replays.append(replay_dict)
-        
+    replays = [dict(row) for row in cursor.fetchall()]
     conn.close()
+    
+    # Enrich with beatmap object
+    for replay in replays:
+        replay['beatmap'] = {
+            'artist': replay.get('artist'), 'title': replay.get('title'), 'creator': replay.get('creator'),
+            'difficulty': replay.get('difficulty'), 'folder_name': replay.get('folder_name'),
+            'osu_file_name': replay.get('osu_file_name'), 'grades': replay.get('grades'),
+            'last_played_date': replay.get('last_played_date'), 'num_hitcircles': replay.get('num_hitcircles'),
+            'num_sliders': replay.get('num_sliders'), 'num_spinners': replay.get('num_spinners'),
+            'ar': replay.get('ar'), 'cs': replay.get('cs'), 'hp': replay.get('hp'), 'od': replay.get('od'),
+            'bpm': replay.get('bpm'), 'audio_file': replay.get('audio_file'), 
+            'background_file': replay.get('background_file'),
+            'bpm_min': replay.get('bpm_min'), 'bpm_max': replay.get('bpm_max')
+        }
+
     return {"replays": replays, "total": total}
 
 def get_unique_players():
@@ -253,16 +255,29 @@ def get_unique_players():
     conn.close()
     return players
 
-def get_all_beatmaps(page=1, limit=50):
-    """Retrieves a paginated list of beatmap records from the database."""
+def get_all_beatmaps(page=1, limit=50, search_term=None):
+    """
+    Retrieves a paginated list of beatmap records from the database,
+    optionally filtered by a search term.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT COUNT(*) FROM beatmaps")
+    where_sql = ""
+    params = []
+    if search_term:
+        search_like = f"%{search_term}%"
+        where_sql = " WHERE title LIKE ? OR artist LIKE ? OR creator LIKE ? "
+        params.extend([search_like, search_like, search_like])
+
+    cursor.execute("SELECT COUNT(*) FROM beatmaps" + where_sql, params)
     total = cursor.fetchone()[0]
 
+    query = "SELECT * FROM beatmaps " + where_sql + " ORDER BY artist, title LIMIT ? OFFSET ?"
     offset = (page - 1) * limit
-    cursor.execute("SELECT * FROM beatmaps ORDER BY artist, title LIMIT ? OFFSET ?", (limit, offset))
+    params.extend([limit, offset])
+
+    cursor.execute(query, params)
     beatmaps = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return {"beatmaps": beatmaps, "total": total}
