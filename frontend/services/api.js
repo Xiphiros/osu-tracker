@@ -67,8 +67,8 @@ export const getBeatmaps = async (page = 1, limit = 50) => {
     return response.json();
 };
 
-export const getRecommendation = async (sr, bpm) => {
-    const response = await fetch(`${API_BASE_URL}/recommend?sr=${sr}&bpm=${bpm}`);
+export const getRecommendation = async (sr, bpm, mods = 0) => {
+    const response = await fetch(`${API_BASE_URL}/recommend?sr=${sr}&bpm=${bpm}&mods=${mods}`);
     if (response.status === 404) {
         return null; // This is an expected outcome if no map is found
     }
