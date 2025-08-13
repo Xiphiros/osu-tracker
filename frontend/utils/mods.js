@@ -34,6 +34,34 @@ export const MODS = {
     Mirror: 1073741824,
 };
 
+// Converts an array of mod acronyms into a bitmask integer
+export function getIntFromMods(modArray) {
+    if (!modArray || modArray.length === 0) return MODS.None;
+
+    const acronyms = {
+        'NF': MODS.NoFail, 'EZ': MODS.Easy, 'TD': MODS.TouchDevice, 'HD': MODS.Hidden,
+        'HR': MODS.HardRock, 'SD': MODS.SuddenDeath, 'DT': MODS.DoubleTime, 'RX': MODS.Relax,
+        'HT': MODS.HalfTime, 'NC': MODS.Nightcore, 'FL': MODS.Flashlight, 'AU': MODS.Autoplay,
+        'SO': MODS.SpunOut, 'AP': MODS.Relax2, 'PF': MODS.Perfect, 
+        '4K': MODS.Key4, '5K': MODS.Key5, '6K': MODS.Key6, '7K': MODS.Key7, '8K': MODS.Key8, '9K': MODS.Key9,
+        '1K': MODS.Key1, '2K': MODS.Key2, '3K': MODS.Key3,
+        'FI': MODS.FadeIn, 'RD': MODS.Random, 'CN': MODS.Cinema, 'TP': MODS.TargetPractice,
+        'CO': MODS.Coop, 'MR': MODS.Mirror, 'V2': MODS.ScoreV2,
+    };
+
+    let total = modArray.reduce((acc, mod) => {
+        return acc | (acronyms[mod.toUpperCase()] || 0);
+    }, 0);
+
+    // NC implies DT
+    if (total & MODS.Nightcore) {
+        total |= MODS.DoubleTime;
+    }
+
+    return total;
+}
+
+
 // Converts a mod integer into an array of string acronyms
 export function getModsFromInt(modInt) {
     if (modInt === 0) return [];
