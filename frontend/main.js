@@ -83,16 +83,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const viewName = e.target.getAttribute('data-view');
             
             if (viewName === 'profile' && !currentPlayer) {
-                // Find the config view's status message to display a prompt.
-                const configStatus = views.config.querySelector('#config-status-message');
-                if(configStatus) {
-                    configStatus.textContent = "Please select a player first, or scan for replays if the list is empty.";
-                    configStatus.style.display = 'block';
-                    configStatus.className = 'info';
-                }
-                switchView('config'); // Redirect to config page to show the message.
+                // Display a message in the global status footer and do not switch views.
+                const statusMessage = document.getElementById('status-message');
+                statusMessage.textContent = 'Please select a player to view their profile.';
                 return;
             }
+
+            const activeLink = document.querySelector('.nav-link.active');
+            if (activeLink && activeLink.getAttribute('data-view') === viewName) {
+                return; // Do nothing if clicking the already active view
+            }
+
             switchView(viewName);
         });
     });
