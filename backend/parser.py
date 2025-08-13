@@ -272,24 +272,28 @@ def parse_osu_file(file_path):
     logging.debug(f"Parser result for {os.path.basename(file_path)}: {data}")
     return data
 
-def calculate_difficulty(osu_file_path):
-    """Calculates NoMod difficulty attributes (e.g., stars) for a beatmap."""
+def calculate_difficulty(osu_file_path, mods=0):
+    """Calculates difficulty attributes (e.g., stars) for a beatmap with given mods."""
     try:
         beatmap = rosu_pp_py.Beatmap(path=osu_file_path)
-        
-        # No mods are applied, so mods=0.
-        diff_calc = rosu_pp_py.Difficulty(mods=0)
+        diff_calc = rosu_pp_py.Difficulty(mods=mods)
         diff_attrs = diff_calc.calculate(beatmap)
         
         diff_data = {
             "stars": diff_attrs.stars,
+            "aim": diff_attrs.aim,
+            "speed": diff_attrs.speed,
+            "slider_factor": diff_attrs.slider_factor,
+            "speed_note_count": diff_attrs.speed_note_count,
+            "aim_difficult_strain_count": diff_attrs.aim_difficult_strain_count,
+            "speed_difficult_strain_count": diff_attrs.speed_difficult_strain_count,
+            "aim_difficult_slider_count": diff_attrs.aim_difficult_slider_count,
         }
         logging.debug(f"Calculated difficulty for {os.path.basename(osu_file_path)}: {diff_data}")
         return diff_data
     except Exception as e:
-        # Return default values if calculation fails for any reason
-        logging.error(f"Could not calculate difficulty for {osu_file_path}: {e}", exc_info=True)
-        return {"stars": None}
+        logging.error(f"Could not calculate difficulty for {osu_file_path} with mods {mods}: {e}", exc_info=False)
+        return {"stars": None, "aim": None, "speed": None, "slider_factor": None}
 
 def calculate_pp(osu_file_path, replay_data):
     """Calculates PP and star rating for a given play using rosu-pp-py."""
@@ -319,10 +323,14 @@ def calculate_pp(osu_file_path, replay_data):
         pp_data = {
             "pp": perf_attrs.pp,
             "stars": perf_attrs.difficulty.stars,
-            "map_max_combo": perf_attrs.difficulty.max_combo,
             "aim": perf_attrs.difficulty.aim,
             "speed": perf_attrs.difficulty.speed,
             "slider_factor": perf_attrs.difficulty.slider_factor,
+            "speed_note_count": perf_attrs.difficulty.speed_note_count,
+            "aim_difficult_strain_count": perf_attrs.difficulty.aim_difficult_strain_count,
+            "speed_difficult_strain_count": perf_attrs.difficulty.speed_difficult_strain_count,
+            "aim_difficult_slider_count": perf_attrs.difficulty.aim_difficult_slider_count,
+            "map_max_combo": perf_attrs.difficulty.max_combo,
         }
         logging.debug(f"Calculated PP data for {os.path.basename(osu_file_path)}: {pp_data}")
         return pp_data
