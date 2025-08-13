@@ -1,4 +1,5 @@
 import { getSongFileUrl } from '../services/api.js';
+import { playAudio } from '../utils/audioPlayer.js';
 
 export function createBeatmapCard(beatmap) {
     const card = document.createElement('div');
@@ -25,12 +26,14 @@ export function createBeatmapCard(beatmap) {
         bpmText = 'N/A';
     }
 
-    // New structure to match the updated CSS
     card.innerHTML = `
         <div class="card-content-wrapper">
             <div class="card-info">
-                <h3 class="card-title" title="${beatmap.artist} - ${beatmap.title}">${beatmap.artist || 'Unknown Artist'} - ${beatmap.title || 'Unknown Title'}</h3>
-                <p class="card-subtitle" title="[${beatmap.difficulty}] mapped by ${beatmap.creator}">[${beatmap.difficulty || '?'}] by ${beatmap.creator || 'Unknown Mapper'}</p>
+                <button class="play-button">▶</button>
+                <div class="card-text-content">
+                    <h3 class="card-title" title="${beatmap.artist} - ${beatmap.title}">${beatmap.artist || 'Unknown Artist'} - ${beatmap.title || 'Unknown Title'}</h3>
+                    <p class="card-subtitle" title="[${beatmap.difficulty}] mapped by ${beatmap.creator}">[${beatmap.difficulty || '?'}] by ${beatmap.creator || 'Unknown Mapper'}</p>
+                </div>
             </div>
             <div class="card-stats">
                 <div class="stat-item" title="Circle Size"><span class="label">CS</span><span class="value">${beatmap.cs}</span></div>
@@ -41,6 +44,21 @@ export function createBeatmapCard(beatmap) {
             </div>
         </div>
     `;
+
+    const playButton = card.querySelector('.play-button');
+    if (beatmap.folder_name && beatmap.audio_file) {
+        const audioUrl = getSongFileUrl(beatmap.folder_name, beatmap.audio_file);
+        playButton.addEventListener('click', (e) => {
+            e.stopPropagation(); // prevent any card-level click events
+            playAudio(
+                audioUrl,
+                () => { playButton.textContent = '❚❚'; }, // onPlay
+                () => { playButton.textContent = '▶'; }  // onEnd
+            );
+        });
+    } else {
+        playButton.disabled = true;
+    }
 
     return card;
 }
