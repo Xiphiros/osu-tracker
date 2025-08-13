@@ -4,6 +4,7 @@ import logging
 import threading
 import webview
 import json
+import signal
 from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -87,7 +88,7 @@ def get_players():
 def get_player_stats(player_name):
     # Note: This still fetches all replays for stat calculation, which is correct.
     # We only paginate the display lists.
-    replays = database.get_all_replays(player_name=player_name, limit=10000)['replays']
+    replays = database.get_all_replays(player_name=player_name, limit=100000)['replays']
     if not replays:
         return jsonify({"total_pp": 0, "play_count": 0, "top_play_pp": 0})
 
@@ -257,7 +258,7 @@ if __name__ == '__main__':
     server_thread.start()
     logging.info("Backend server started in a background thread.")
 
-    webview.create_window(
+    window = webview.create_window(
         'osu! Local Score Tracker',
         'http://127.0.0.1:5000',
         width=1280,
@@ -265,4 +266,19 @@ if __name__ == '__main__':
         resizable=True,
         min_size=(960, 600)
     )
+
+    def on_closing():
+        """
+        Called when the pywebview window is closing. This function shuts down
+        the Flask server gracefully when running in development mode.
+        """
+        logging.info("Webview window is closing. Shutting down application.")
+        # For the development server, send SIGINT to the process, like Ctrl+C.
+        # This allows Werkzeug to shut down cleanly.
+        if not IS_BUNDLED:
+            os.kill(os.getpid(), signal.SIGINT)
+        # For the bundled app, the daemon thread is terminated automatically.
+
+    window.events.closing += on_closing
+
     webview.start(debug=not IS_BUNDLED)
