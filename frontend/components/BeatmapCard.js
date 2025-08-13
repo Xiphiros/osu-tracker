@@ -24,18 +24,19 @@ export function createBeatmapCard(beatmap) {
         bpmText = 'N/A';
     }
 
+    // New structure to match the updated CSS
     card.innerHTML = `
-        <div class="card-content">
-            <div class="card-header">
-                <div class="card-title" title="${beatmap.artist} - ${beatmap.title}">${beatmap.artist || 'Unknown Artist'} - ${beatmap.title || 'Unknown Title'}</div>
-                <div class="card-subtitle" title="[${beatmap.difficulty}] mapped by ${beatmap.creator}">[${beatmap.difficulty || '?'}] by ${beatmap.creator || 'Unknown Mapper'}</div>
+        <div class="card-content-wrapper">
+            <div class="card-info">
+                <h3 class="card-title" title="${beatmap.artist} - ${beatmap.title}">${beatmap.artist || 'Unknown Artist'} - ${beatmap.title || 'Unknown Title'}</h3>
+                <p class="card-subtitle" title="[${beatmap.difficulty}] mapped by ${beatmap.creator}">[${beatmap.difficulty || '?'}] by ${beatmap.creator || 'Unknown Mapper'}</p>
             </div>
             <div class="card-stats">
                 <div class="stat-item" title="Circle Size"><span class="label">CS</span><span class="value">${beatmap.cs}</span></div>
                 <div class="stat-item" title="Approach Rate"><span class="label">AR</span><span class="value">${beatmap.ar}</span></div>
                 <div class="stat-item" title="Overall Difficulty"><span class="label">OD</span><span class="value">${beatmap.od}</span></div>
                 <div class="stat-item" title="HP Drain"><span class="label">HP</span><span class="value">${beatmap.hp}</span></div>
-                <div class="stat-item-wide" title="Beats Per Minute"><span class="label">♫</span><span class="value">${bpmText}</span></div>
+                <div class="stat-item bpm-stat" title="Beats Per Minute"><span class="label">♫</span><span class="value">${bpmText}</span></div>
             </div>
         </div>
     `;
