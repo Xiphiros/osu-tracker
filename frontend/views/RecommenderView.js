@@ -11,7 +11,8 @@ import {
 	createReplayCard
 } from '../components/ReplayCard.js';
 import {
-	getIntFromMods
+	getIntFromMods,
+	MODS
 } from '../utils/mods.js';
 
 let progressInterval = null;
@@ -302,15 +303,20 @@ export function createRecommenderView() {
 						const latestReplay = await getLatestReplay(playerName);
 						if (latestReplay && latestReplay.beatmap_md5 === currentRecommendation.md5_hash) {
 							if ((latestReplay.mods_used & ~1) === currentRecommendation.mods) {
-								const minAcc = parseFloat(goalAccInput.value) || null,
-									minScore = parseInt(goalScoreInput.value, 10) || null;
-								const maxMisses = parseInt(goalMissesInput.value, 10),
-									playAcc = calculateAccuracy(latestReplay);
+								const minAcc = parseFloat(goalAccInput.value) || null;
+								const minScore = parseInt(goalScoreInput.value, 10) || null;
+								const maxMisses = parseInt(goalMissesInput.value, 10);
+								const playAcc = calculateAccuracy(latestReplay);
+								const hasV2 = (latestReplay.mods_used & MODS.ScoreV2) > 0;
+
 								let goalFailed = false,
 									failReason = '';
 								if (minAcc !== null && playAcc < minAcc) {
 									goalFailed = true;
 									failReason = `Accuracy was ${playAcc.toFixed(2)}% (needed ${minAcc}%)`;
+								} else if (minScore !== null && !hasV2) {
+									goalFailed = true;
+									failReason = 'Play was not on ScoreV2 (score goal requires V2)';
 								} else if (minScore !== null && latestReplay.total_score < minScore) {
 									goalFailed = true;
 									failReason = `Score was ${latestReplay.total_score.toLocaleString()} (needed ${minScore.toLocaleString()})`;
