@@ -1,0 +1,88 @@
+.beatmap-card {
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    position: relative;
+    background-size: cover;
+    background-position: center;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    border: 1px solid var(--border-color);
+    color: white;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 110px;
+}
+
+.beatmap-card::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    background: rgba(0,0,0,0.8);
+    border-radius: 8px;
+    z-index: 0;
+}
+
+.beatmap-card .card-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.beatmap-card .card-header {
+    flex-grow: 1;
+}
+
+.beatmap-card .card-title {
+    font-size: 1.2em;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.beatmap-card .card-subtitle {
+    font-size: 0.9em;
+    color: #ccc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 10px;
+}
+
+.beatmap-card .card-stats {
+    display: flex;
+    gap: 10px;
+    margin-top: auto;
+    background: rgba(0,0,0,0.4);
+    padding: 8px;
+    border-radius: 6px;
+}
+
+.beatmap-card .stat-item, .beatmap-card .stat-item-wide {
+    text-align: center;
+    flex: 1;
+}
+
+.beatmap-card .stat-item-wide {
+    flex: 2;
+    text-align: right;
+    padding-right: 5px;
+}
+
+.beatmap-card .stat-item .label, .beatmap-card .stat-item-wide .label {
+    font-size: 0.8em;
+    color: #bbb;
+    margin-right: 5px;
+}
+
+.beatmap-card .stat-item .value {
+    font-weight: 500;
+}
+#beatmaps-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 15px;
+}
