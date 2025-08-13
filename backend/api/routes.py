@@ -144,6 +144,8 @@ def suggest_sr(player_name):
         focused_plays = [p for p in mod_plays if p.get('aim') and p.get('speed') and p['aim'] > p['speed']]
     elif focus == 'speed':
         focused_plays = [p for p in mod_plays if p.get('aim') and p.get('speed') and p['speed'] > p['aim']]
+    elif focus == 'technical':
+        focused_plays = [p for p in mod_plays if p.get('slider_factor', 0) > 1.3]
     else: # balanced or no focus
         focused_plays = mod_plays
         
