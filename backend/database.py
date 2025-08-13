@@ -153,15 +153,19 @@ def add_replay(replay_data):
     conn.commit()
     conn.close()
 
-def get_all_replays(player_name=None):
+def get_all_replays(player_name=None, page=1, limit=50):
     """
-    Retrieves all replay records, enriched with beatmap data using a JOIN.
-    This is more efficient than merging in Python.
+    Retrieves a paginated list of replay records, enriched with beatmap data.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
-        
-    query = """
+    
+    base_query = """
+        FROM replays r
+        LEFT JOIN beatmaps b ON r.beatmap_md5 = b.md5_hash
+    """
+    count_query = "SELECT COUNT(r.id) " + base_query
+    select_query = """
         SELECT
             r.*,
             b.artist, b.title, b.creator, b.difficulty, b.folder_name,
@@ -171,29 +175,30 @@ def get_all_replays(player_name=None):
             COALESCE(r.bpm, b.bpm) as bpm,
             COALESCE(r.bpm_min, b.bpm_min) as bpm_min,
             COALESCE(r.bpm_max, b.bpm_max) as bpm_max
-        FROM replays r
-        LEFT JOIN beatmaps b ON r.beatmap_md5 = b.md5_hash
-    """
+    """ + base_query
 
     params = []
     if player_name:
-        query += " WHERE r.player_name = ?"
+        where_clause = " WHERE r.player_name = ?"
+        count_query += where_clause
+        select_query += where_clause
         params.append(player_name)
+    
+    cursor.execute(count_query, params)
+    total = cursor.fetchone()[0]
 
-    query += " ORDER BY r.played_at DESC"
-
-    cursor.execute(query, params)
+    select_query += " ORDER BY r.played_at DESC LIMIT ? OFFSET ?"
+    offset = (page - 1) * limit
+    params.extend([limit, offset])
+    
+    cursor.execute(select_query, params)
 
     replays = []
     for row in cursor.fetchall():
         replay_dict = dict(row)
-        
-        # If artist is None, the LEFT JOIN found no matching beatmap.
-        # In this case, we create an empty beatmap object.
         if row['artist'] is None:
             replay_dict['beatmap'] = {}
         else:
-            # Otherwise, we construct the nested beatmap object as expected by the frontend.
             replay_dict['beatmap'] = {
                 'artist': row['artist'], 'title': row['title'], 'creator': row['creator'],
                 'difficulty': row['difficulty'], 'folder_name': row['folder_name'],
@@ -208,7 +213,7 @@ def get_all_replays(player_name=None):
         replays.append(replay_dict)
         
     conn.close()
-    return replays
+    return {"replays": replays, "total": total}
 
 def get_unique_players():
     """Retrieves a list of unique player names from the replays table."""
@@ -219,14 +224,19 @@ def get_unique_players():
     conn.close()
     return players
 
-def get_all_beatmaps():
-    """Retrieves all beatmap records from the database."""
+def get_all_beatmaps(page=1, limit=50):
+    """Retrieves a paginated list of beatmap records from the database."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM beatmaps")
+
+    cursor.execute("SELECT COUNT(*) FROM beatmaps")
+    total = cursor.fetchone()[0]
+
+    offset = (page - 1) * limit
+    cursor.execute("SELECT * FROM beatmaps ORDER BY artist, title LIMIT ? OFFSET ?", (limit, offset))
     beatmaps = [dict(row) for row in cursor.fetchall()]
     conn.close()
-    return beatmaps
+    return {"beatmaps": beatmaps, "total": total}
 
 def add_or_update_beatmaps(beatmaps_data):
     """
