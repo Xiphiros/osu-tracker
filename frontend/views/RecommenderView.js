@@ -19,8 +19,9 @@ export function createRecommenderView() {
                 <input type="number" id="target-sr" value="${savedSr}" step="0.1" min="1">
             </div>
             <div class="control-group">
-                <label for="max-bpm">Max BPM</label>
+                <label for="max-bpm">Target Max BPM</label>
                 <input type="number" id="max-bpm" value="${savedBpm}" step="5" min="60">
+                <span class="bpm-helper-text"></span>
             </div>
             <button id="find-map-button">Find a map</button>
         </div>
@@ -36,6 +37,7 @@ export function createRecommenderView() {
     const findButton = view.querySelector('#find-map-button');
     const srInput = view.querySelector('#target-sr');
     const bpmInput = view.querySelector('#max-bpm');
+    const bpmHelperText = view.querySelector('.bpm-helper-text');
     const resultContainer = view.querySelector('#recommender-result');
     const feedbackContainer = view.querySelector('#recommender-feedback');
     const passedButton = view.querySelector('#passed-button');
@@ -44,7 +46,23 @@ export function createRecommenderView() {
     const statusMessage = document.getElementById('status-message');
 
     const activeMods = new Set();
-    const trainingMods = ['EZ', 'HD', 'HR', 'DT', 'FL'];
+    const trainingMods = ['EZ', 'HD', 'HR', 'DT', 'HT', 'FL'];
+
+    const updateBpmHelper = () => {
+        const bpm = parseInt(bpmInput.value, 10);
+        if (isNaN(bpm)) {
+            bpmHelperText.textContent = '';
+            return;
+        }
+
+        if (activeMods.has('DT')) {
+            bpmHelperText.textContent = `(Original map BPM will be ~${Math.round(bpm / 1.5)})`;
+        } else if (activeMods.has('HT')) {
+            bpmHelperText.textContent = `(Original map BPM will be ~${Math.round(bpm / 0.75)})`;
+        } else {
+            bpmHelperText.textContent = '';
+        }
+    };
 
     trainingMods.forEach(mod => {
         const button = document.createElement('button');
@@ -59,22 +77,27 @@ export function createRecommenderView() {
                 }
             };
 
-            if (!activeMods.has(mod)) { // Activating a new mod
-                if (mod === 'DT') deactivate('HR');
+            if (!activeMods.has(mod)) {
+                if (mod === 'DT') { deactivate('HR'); deactivate('HT'); }
+                if (mod === 'HT') { deactivate('DT'); }
                 if (mod === 'HR') { deactivate('DT'); deactivate('EZ'); }
-                if (mod === 'EZ') deactivate('HR');
+                if (mod === 'EZ') { deactivate('HR'); }
                 activeMods.add(mod);
                 button.classList.add('active');
-            } else { // Deactivating an active mod
+            } else {
                 activeMods.delete(mod);
                 button.classList.remove('active');
             }
+            updateBpmHelper();
         });
         modContainer.appendChild(button);
     });
 
     srInput.addEventListener('change', () => localStorage.setItem('recommender_sr', srInput.value));
     bpmInput.addEventListener('change', () => localStorage.setItem('recommender_bpm', bpmInput.value));
+    bpmInput.addEventListener('input', updateBpmHelper);
+    
+    updateBpmHelper(); // Initial call to set text if needed on load
 
     const resetView = () => {
         resultContainer.innerHTML = '<p>Set your target SR and max BPM, then click "Find a map".</p>';
