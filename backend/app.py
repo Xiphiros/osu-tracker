@@ -80,6 +80,21 @@ def get_replays():
 
     return jsonify(replays_data)
 
+@app.route('/api/replays/latest', methods=['GET'])
+def get_latest_replay():
+    """API endpoint to get the single most recent replay for a player."""
+    player_name = request.args.get('player_name')
+    if not player_name:
+        return jsonify({"error": "Missing 'player_name' parameter."}), 400
+    
+    # We can reuse get_all_replays since it sorts by date descending and supports limits.
+    replays_data = database.get_all_replays(player_name=player_name, page=1, limit=1)
+    
+    if replays_data and replays_data['replays']:
+        return jsonify(replays_data['replays'][0])
+    else:
+        return jsonify({"message": "No replays found for this player."}), 404
+
 @app.route('/api/players', methods=['GET'])
 def get_players():
     players = database.get_unique_players()
