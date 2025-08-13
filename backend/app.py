@@ -106,6 +106,27 @@ def get_player_stats(player_name):
     }
     return jsonify(stats)
 
+@app.route('/api/recommend', methods=['GET'])
+def get_recommendation():
+    """API endpoint to recommend a beatmap based on SR and BPM."""
+    try:
+        target_sr = request.args.get('sr', type=float)
+        max_bpm = request.args.get('bpm', type=int)
+        
+        if target_sr is None or max_bpm is None:
+            return jsonify({"error": "Missing 'sr' or 'bpm' parameters."}), 400
+
+        beatmap = database.get_recommendation(target_sr, max_bpm)
+        
+        if beatmap:
+            return jsonify(beatmap)
+        else:
+            return jsonify({"message": "No suitable beatmap found."}), 404
+            
+    except Exception as e:
+        logging.error(f"Error in recommendation endpoint: {e}", exc_info=True)
+        return jsonify({"error": "An internal error occurred."}), 500
+
 @app.route('/api/songs/<path:file_path>')
 def serve_song_file(file_path):
     osu_folder = os.getenv('OSU_FOLDER')
