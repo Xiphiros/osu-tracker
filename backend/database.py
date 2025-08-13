@@ -153,20 +153,59 @@ def add_replay(replay_data):
     conn.close()
 
 def get_all_replays(player_name=None):
-    """Retrieves all replay records from the database, optionally filtering by player name."""
+    """
+    Retrieves all replay records, enriched with beatmap data using a JOIN.
+    This is more efficient than merging in Python.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
-    query = "SELECT * FROM replays"
+        
+    query = """
+        SELECT
+            r.*,
+            b.artist, b.title, b.creator, b.difficulty, b.folder_name,
+            b.osu_file_name, b.grades, b.last_played_date, b.num_hitcircles,
+            b.num_sliders, b.num_spinners, b.ar, b.cs, b.hp, b.od,
+            b.audio_file, b.background_file,
+            COALESCE(r.bpm, b.bpm) as bpm,
+            COALESCE(r.bpm_min, b.bpm_min) as bpm_min,
+            COALESCE(r.bpm_max, b.bpm_max) as bpm_max
+        FROM replays r
+        LEFT JOIN beatmaps b ON r.beatmap_md5 = b.md5_hash
+    """
+
     params = []
     if player_name:
-        query += " WHERE player_name = ?"
+        query += " WHERE r.player_name = ?"
         params.append(player_name)
-    
-    # Order by date played, most recent first, which is a better user-facing default.
-    query += " ORDER BY played_at DESC"
-    
+
+    query += " ORDER BY r.played_at DESC"
+
     cursor.execute(query, params)
-    replays = [dict(row) for row in cursor.fetchall()]
+
+    replays = []
+    for row in cursor.fetchall():
+        replay_dict = dict(row)
+        
+        # If artist is None, the LEFT JOIN found no matching beatmap.
+        # In this case, we create an empty beatmap object.
+        if row['artist'] is None:
+            replay_dict['beatmap'] = {}
+        else:
+            # Otherwise, we construct the nested beatmap object as expected by the frontend.
+            replay_dict['beatmap'] = {
+                'artist': row['artist'], 'title': row['title'], 'creator': row['creator'],
+                'difficulty': row['difficulty'], 'folder_name': row['folder_name'],
+                'osu_file_name': row['osu_file_name'], 'grades': row['grades'],
+                'last_played_date': row['last_played_date'], 'num_hitcircles': row['num_hitcircles'],
+                'num_sliders': row['num_sliders'], 'num_spinners': row['num_spinners'],
+                'ar': row['ar'], 'cs': row['cs'], 'hp': row['hp'], 'od': row['od'],
+                'bpm': row['bpm'], 'audio_file': row['audio_file'], 
+                'background_file': row['background_file'],
+                'bpm_min': row['bpm_min'], 'bpm_max': row['bpm_max']
+            }
+        replays.append(replay_dict)
+        
     conn.close()
     return replays
 
