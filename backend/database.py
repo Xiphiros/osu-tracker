@@ -20,10 +20,9 @@ def init_db():
         """Applies necessary schema migrations to an existing database."""
         cursor = conn.cursor()
         
-        # Migration for replays table
+        # --- Migration for replays table ---
         cursor.execute("PRAGMA table_info(replays)")
         replay_columns = [row['name'] for row in cursor.fetchall()]
-        
         if 'bpm_min' not in replay_columns:
             logging.info("Applying migration: Adding 'bpm_min' to 'replays' table.")
             cursor.execute("ALTER TABLE replays ADD COLUMN bpm_min REAL")
@@ -31,18 +30,25 @@ def init_db():
             logging.info("Applying migration: Adding 'bpm_max' to 'replays' table.")
             cursor.execute("ALTER TABLE replays ADD COLUMN bpm_max REAL")
 
-        # Migration for beatmaps table
+        # --- Migration for beatmaps table ---
         cursor.execute("PRAGMA table_info(beatmaps)")
         beatmap_columns = [row['name'] for row in cursor.fetchall()]
-        
         if 'stars' not in beatmap_columns:
             logging.info("Applying migration: Adding 'stars' to 'beatmaps' table.")
             cursor.execute("ALTER TABLE beatmaps ADD COLUMN stars REAL")
         if 'game_mode' not in beatmap_columns:
             logging.info("Applying migration: Adding 'game_mode' to 'beatmaps' table.")
             cursor.execute("ALTER TABLE beatmaps ADD COLUMN game_mode INTEGER")
-        # NOTE: Migration to *remove* a column is complex in SQLite. Since this is a cache,
-        # users who synced with the previous version can simply re-sync. New users will be unaffected.
+
+        # --- Migration for beatmap_mod_cache table ---
+        cursor.execute("PRAGMA table_info(beatmap_mod_cache)")
+        cache_columns = [row['name'] for row in cursor.fetchall()]
+        if 'aim' not in cache_columns:
+            logging.info("Applying migration: Adding 'aim' to 'beatmap_mod_cache' table.")
+            cursor.execute("ALTER TABLE beatmap_mod_cache ADD COLUMN aim REAL")
+        if 'speed' not in cache_columns:
+            logging.info("Applying migration: Adding 'speed' to 'beatmap_mod_cache' table.")
+            cursor.execute("ALTER TABLE beatmap_mod_cache ADD COLUMN speed REAL")
         
         conn.commit()
 
@@ -119,6 +125,8 @@ def init_db():
             cs REAL,
             hp REAL,
             bpm REAL,
+            aim REAL,
+            speed REAL,
             PRIMARY KEY (md5_hash, mods)
         )
     ''')
@@ -340,19 +348,23 @@ def add_beatmap_mod_cache(cache_data):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # cache_data is expected to be a list of dicts
-    params = [(d['md5_hash'], d['mods'], d['stars'], d['ar'], d['od'], d['cs'], d['hp'], d['bpm']) for d in cache_data]
+    params = [(
+        d['md5_hash'], d['mods'], d['stars'], d['ar'], d['od'], 
+        d['cs'], d['hp'], d['bpm'], d.get('aim'), d.get('speed')
+    ) for d in cache_data]
 
     cursor.executemany('''
-        INSERT INTO beatmap_mod_cache (md5_hash, mods, stars, ar, od, cs, hp, bpm)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO beatmap_mod_cache (md5_hash, mods, stars, ar, od, cs, hp, bpm, aim, speed)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(md5_hash, mods) DO UPDATE SET
             stars=excluded.stars,
             ar=excluded.ar,
             od=excluded.od,
             cs=excluded.cs,
             hp=excluded.hp,
-            bpm=excluded.bpm
+            bpm=excluded.bpm,
+            aim=excluded.aim,
+            speed=excluded.speed
     ''', params)
     
     conn.commit()
