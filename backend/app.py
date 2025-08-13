@@ -5,6 +5,7 @@ import threading
 import webview
 import json
 import signal
+import concurrent.futures
 from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -147,6 +148,16 @@ def serve_index(path):
         return send_from_directory(app.static_folder, path)
     return send_from_directory(app.static_folder, 'index.html')
 
+def process_osu_file(osu_file_path, md5):
+    """Helper function to process a single .osu file for parallel execution."""
+    try:
+        details = parser.parse_osu_file(osu_file_path)
+        details.update(parser.calculate_difficulty(osu_file_path))
+        return md5, details
+    except Exception as e:
+        logging.warning(f"Could not parse or process .osu file {osu_file_path}: {e}")
+        return md5, {}
+
 def sync_local_beatmaps_task():
     """Task to parse osu!.db and .osu files, updating global progress."""
     progress = TASK_PROGRESS['sync']
@@ -166,21 +177,36 @@ def sync_local_beatmaps_task():
         
         progress['message'] = 'Parsing osu!.db...'
         beatmap_data = parser.parse_osu_db(db_path)
-        progress['total'] = len(beatmap_data)
         
-        for i, (md5, beatmap) in enumerate(beatmap_data.items()):
-            progress['current'] = i + 1
-            progress['message'] = f"Parsing {beatmap.get('osu_file_name', 'beatmap')}..."
-
-            if beatmap.get('folder_name') and beatmap.get('osu_file_name'):
+        tasks = []
+        for md5, beatmap in beatmap_data.items():
+             if beatmap.get('folder_name') and beatmap.get('osu_file_name'):
                 osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
                 if os.path.exists(osu_file_path):
-                    try:
-                        beatmap.update(parser.parse_osu_file(osu_file_path))
-                        beatmap.update(parser.calculate_difficulty(osu_file_path))
-                    except Exception as e:
-                        logging.warning(f"Could not parse or process .osu file {osu_file_path}: {e}")
-        
+                    tasks.append((osu_file_path, md5))
+
+        progress['message'] = f"Calculating difficulty for {len(tasks)} beatmaps..."
+        progress['total'] = len(tasks)
+        progress['current'] = 0
+
+        # Use a ThreadPoolExecutor for I/O-bound and GIL-releasing CPU-bound tasks.
+        # This will significantly speed up parsing and calculating thousands of .osu files.
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_to_md5 = {executor.submit(process_osu_file, path, md5): md5 for path, md5 in tasks}
+            
+            for future in concurrent.futures.as_completed(future_to_md5):
+                progress['current'] += 1
+                md5 = future_to_md5[future]
+                beatmap_name = beatmap_data.get(md5, {}).get('osu_file_name', 'beatmap')
+                progress['message'] = f"Processing {beatmap_name}..."
+                
+                try:
+                    _md5, result_data = future.result()
+                    if result_data:
+                        beatmap_data[_md5].update(result_data)
+                except Exception as e:
+                    logging.error(f"Error processing future for {beatmap_name}: {e}", exc_info=True)
+
         progress['message'] = 'Saving to database...'
         database.add_or_update_beatmaps(beatmap_data)
 
@@ -271,7 +297,7 @@ if __name__ == '__main__':
     def on_closing():
         """
         Called when the pywebview window is closing. This function shuts down
-        the Flask server gracefully when running in development mode.
+        the Flask server gracefully when running in a development environment.
         """
         logging.info("Webview window is closing. Shutting down application.")
         # For the development server, send SIGINT to the process, like Ctrl+C.
