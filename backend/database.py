@@ -35,6 +35,9 @@ def init_db():
         if 'speed' not in replay_columns:
             logging.info("Applying migration: Adding 'speed' to 'replays' table.")
             cursor.execute("ALTER TABLE replays ADD COLUMN speed REAL")
+        if 'slider_factor' not in replay_columns:
+            logging.info("Applying migration: Adding 'slider_factor' to 'replays' table.")
+            cursor.execute("ALTER TABLE replays ADD COLUMN slider_factor REAL")
 
         # --- Migration for beatmaps table ---
         cursor.execute("PRAGMA table_info(beatmaps)")
@@ -55,13 +58,15 @@ def init_db():
         if 'speed' not in cache_columns:
             logging.info("Applying migration: Adding 'speed' to 'beatmap_mod_cache' table.")
             cursor.execute("ALTER TABLE beatmap_mod_cache ADD COLUMN speed REAL")
+        if 'slider_factor' not in cache_columns:
+            logging.info("Applying migration: Adding 'slider_factor' to 'beatmap_mod_cache' table.")
+            cursor.execute("ALTER TABLE beatmap_mod_cache ADD COLUMN slider_factor REAL")
         
         conn.commit()
 
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Updated table schema with detailed BPM fields
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS replays (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,6 +88,7 @@ def init_db():
             stars REAL,
             aim REAL,
             speed REAL,
+            slider_factor REAL,
             map_max_combo INTEGER,
             bpm REAL,
             played_at TEXT,
@@ -92,8 +98,6 @@ def init_db():
         )
     ''')
 
-    # New beatmaps table to store map details persistently.
-    # md5_hash is the primary key as it's the natural unique identifier.
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS beatmaps (
             md5_hash TEXT PRIMARY KEY,
@@ -122,7 +126,6 @@ def init_db():
         )
     ''')
     
-    # New table for caching modded difficulty calculations
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS beatmap_mod_cache (
             md5_hash TEXT NOT NULL,
@@ -135,6 +138,7 @@ def init_db():
             bpm REAL,
             aim REAL,
             speed REAL,
+            slider_factor REAL,
             PRIMARY KEY (md5_hash, mods)
         )
     ''')
@@ -168,6 +172,7 @@ def add_replay(replay_data):
         'stars': replay_data.get('stars'),
         'aim': replay_data.get('aim'),
         'speed': replay_data.get('speed'),
+        'slider_factor': replay_data.get('slider_factor'),
         'map_max_combo': replay_data.get('map_max_combo'),
         'bpm': replay_data.get('bpm'),
         'bpm_min': replay_data.get('bpm_min'),
@@ -179,12 +184,12 @@ def add_replay(replay_data):
         INSERT INTO replays (
             game_mode, game_version, beatmap_md5, player_name, replay_md5,
             num_300s, num_100s, num_50s, num_gekis, num_katus, num_misses,
-            total_score, max_combo, mods_used, pp, stars, aim, speed, map_max_combo, 
+            total_score, max_combo, mods_used, pp, stars, aim, speed, slider_factor, map_max_combo, 
             bpm, bpm_min, bpm_max, played_at
         ) VALUES (
             :game_mode, :game_version, :beatmap_md5, :player_name, :replay_md5,
             :num_300s, :num_100s, :num_50s, :num_gekis, :num_katus, :num_misses,
-            :total_score, :max_combo, :mods_used, :pp, :stars, :aim, :speed, :map_max_combo, 
+            :total_score, :max_combo, :mods_used, :pp, :stars, :aim, :speed, :slider_factor, :map_max_combo, 
             :bpm, :bpm_min, :bpm_max, :played_at
         )
         ON CONFLICT(replay_md5) DO UPDATE SET
@@ -192,6 +197,7 @@ def add_replay(replay_data):
             stars = excluded.stars,
             aim = excluded.aim,
             speed = excluded.speed,
+            slider_factor = excluded.slider_factor,
             map_max_combo = excluded.map_max_combo,
             bpm = excluded.bpm,
             bpm_min = excluded.bpm_min,
@@ -362,12 +368,12 @@ def add_beatmap_mod_cache(cache_data):
     
     params = [(
         d['md5_hash'], d['mods'], d['stars'], d['ar'], d['od'], 
-        d['cs'], d['hp'], d['bpm'], d.get('aim'), d.get('speed')
+        d['cs'], d['hp'], d['bpm'], d.get('aim'), d.get('speed'), d.get('slider_factor')
     ) for d in cache_data]
 
     cursor.executemany('''
-        INSERT INTO beatmap_mod_cache (md5_hash, mods, stars, ar, od, cs, hp, bpm, aim, speed)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO beatmap_mod_cache (md5_hash, mods, stars, ar, od, cs, hp, bpm, aim, speed, slider_factor)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(md5_hash, mods) DO UPDATE SET
             stars=excluded.stars,
             ar=excluded.ar,
@@ -376,7 +382,8 @@ def add_beatmap_mod_cache(cache_data):
             hp=excluded.hp,
             bpm=excluded.bpm,
             aim=excluded.aim,
-            speed=excluded.speed
+            speed=excluded.speed,
+            slider_factor=excluded.slider_factor
     ''', params)
     
     conn.commit()
@@ -433,6 +440,8 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[], focus=None):
             focus_clause = " AND c.aim > c.speed "
         elif focus == 'speed':
             focus_clause = " AND c.speed > c.aim "
+        elif focus == 'technical':
+            focus_clause = " AND c.slider_factor > 1.3 "
 
         exclude_placeholders = '?' * len(excluded_ids)
         query = f"""
@@ -498,6 +507,7 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[], focus=None):
         beatmap['stars'] = round(diff_attrs.stars, 2)
         beatmap['aim'] = round(diff_attrs.aim, 2)
         beatmap['speed'] = round(diff_attrs.speed, 2)
+        beatmap['slider_factor'] = round(diff_attrs.slider_factor, 2)
         beatmap['bpm'] = round(beatmap['bpm'] * modded_map_attrs.clock_rate)
         beatmap['ar'] = round(modded_map_attrs.ar, 2)
         beatmap['cs'] = round(modded_map_attrs.cs, 2)
