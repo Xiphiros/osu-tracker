@@ -53,6 +53,7 @@ export function createRecommenderView() {
                         <input type="number" id="target-sr" value="${savedSr}" step="0.1" min="1">
                         <button id="suggest-sr-button" class="small-button" title="Suggest SR based on your goals and play history">Suggest</button>
                     </div>
+                    <span class="control-group-spacer">&nbsp;</span>
                 </div>
                 <div class="control-group">
                     <label for="max-bpm">Target Max BPM</label>
