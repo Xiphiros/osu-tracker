@@ -278,11 +278,13 @@ def calculate_pp(osu_file_path, replay_data):
     try:
         # Parse the beatmap file
         beatmap = rosu_pp_py.Beatmap(path=osu_file_path)
+        mods = replay_data.get('mods_used', 0)
 
-        # First, calculate the difficulty attributes (stars)
-        diff_attrs = rosu_pp_py.Difficulty().calculate(beatmap)
+        # First, calculate the difficulty attributes (stars) for the given mods.
+        diff_calc = rosu_pp_py.Difficulty(mods=mods)
+        diff_attrs = diff_calc.calculate(beatmap)
 
-        # Then, create a performance calculator with the score's details
+        # Then, create a performance calculator with the score's details.
         perf_calc = rosu_pp_py.Performance(
             n300=replay_data.get('num_300s'),
             n100=replay_data.get('num_100s'),
@@ -293,14 +295,13 @@ def calculate_pp(osu_file_path, replay_data):
             combo=replay_data.get('max_combo'),
         )
         
-        # Calculate the performance attributes (pp) using the difficulty attributes
-        # for better performance.
+        # Calculate performance attributes using the modded difficulty attributes for accuracy and speed.
         perf_attrs = perf_calc.calculate(diff_attrs)
         
         pp_data = {
             "pp": perf_attrs.pp,
-            "stars": diff_attrs.stars,
-            "map_max_combo": diff_attrs.max_combo
+            "stars": perf_attrs.difficulty.stars,
+            "map_max_combo": perf_attrs.difficulty.max_combo
         }
         logging.debug(f"Calculated PP data for {os.path.basename(osu_file_path)}: {pp_data}")
         return pp_data
