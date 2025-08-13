@@ -1,0 +1,63 @@
+/* Config View styles */
+.config-action-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.config-action-card h3 {
+    margin-top: 0;
+    font-size: 1.3em;
+}
+
+.config-action-card p {
+    color: #ccc;
+    line-height: 1.5;
+    margin-bottom: 20px;
+    font-size: 0.95em;
+}
+
+.config-action-card button {
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.config-action-card button:hover:not(:disabled) {
+    background-color: var(--accent-hover);
+}
+
+.config-action-card button:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+
+#config-status-message {
+    font-size: 1em;
+    color: #ccc;
+    text-align: center;
+    margin: 0 0 25px 0;
+    padding: 12px;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    min-height: 1.5em;
+    display: none; /* Hidden until there's a message */
+}
+
+#config-status-message.success {
+    color: #88ff88;
+    border-color: #3a5a3a;
+}
+#config-status-message.error {
+    color: #ff8888;
+    border-color: #5a3a3a;
+}
