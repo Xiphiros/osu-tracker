@@ -11,7 +11,7 @@
     padding: 20px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 15px;
 }
 
 .recommender-actions-wrapper {
@@ -43,11 +43,25 @@
     width: 120px;
 }
 
-.control-group .bpm-helper-text {
+/* Hide spinners from number inputs for a cleaner look */
+.control-group input[type=number]::-webkit-inner-spin-button, 
+.control-group input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+.control-group input[type=number] {
+  -moz-appearance: textfield;
+}
+
+.control-group .bpm-helper-text, .control-group .control-group-spacer {
     font-size: 0.8em;
-    color: #aaa;
-    min-height: 1.2em; /* Prevent layout shift */
+    min-height: 1.2em; /* Prevent layout shift by reserving space */
     margin-top: 4px;
+    display: block; /* Ensure it takes up space */
+}
+
+.control-group .bpm-helper-text {
+    color: #aaa;
 }
 
 .input-with-button {
@@ -61,7 +75,7 @@
 }
 
 .input-with-button .small-button {
-    padding: 6px 12px;
+    padding: 8px 12px; /* Adjusted padding for better vertical alignment */
     font-size: 0.85em;
     background-color: #444;
     border: 1px solid var(--border-color);
@@ -69,7 +83,6 @@
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.2s;
-    height: 100%; /* Match input height */
 }
 
 .input-with-button .small-button:hover:not(:disabled) {
@@ -81,7 +94,6 @@
     cursor: not-allowed;
 }
 
-
 .recommender-controls button#find-map-button {
     background-color: var(--accent-color);
     color: white;
@@ -92,7 +104,7 @@
     font-size: 1em;
     font-weight: 500;
     transition: background-color 0.2s;
-    margin-left: auto;
+    margin-left: auto; /* Push to the far right of the flex container */
 }
 
 .recommender-controls button#find-map-button:hover:not(:disabled) {
@@ -112,7 +124,6 @@
     order: -1;
     padding-bottom: 15px;
     border-bottom: 1px solid var(--border-color);
-    margin-bottom: 5px;
 }
 
 .mod-selection-container .mod-button {
