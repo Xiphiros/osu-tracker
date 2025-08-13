@@ -121,3 +121,26 @@ export const getSuggestedSr = async (playerName, params) => {
     }
     return response.json();
 };
+
+export const getConfig = async () => {
+    const response = await fetch(`${API_BASE_URL}/config`);
+    if (!response.ok) {
+        throw new Error('Failed to fetch configuration.');
+    }
+    return response.json();
+};
+
+export const saveConfig = async (configData) => {
+    const response = await fetch(`${API_BASE_URL}/config`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(configData),
+    });
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save configuration.');
+    }
+    return response.json();
+};
