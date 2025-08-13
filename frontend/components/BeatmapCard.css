@@ -74,18 +74,16 @@
 .beatmap-card .card-title {
     font-size: 1.25em;
     font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    /* Allow text to wrap instead of truncating */
+    white-space: normal; 
     margin: 0;
 }
 
 .beatmap-card .card-subtitle {
     font-size: 0.9em;
     color: #ccc;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    /* Allow text to wrap instead of truncating */
+    white-space: normal;
     margin-top: 4px;
 }
 
@@ -132,6 +130,7 @@
 
 #beatmaps-container {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
-    gap: 20px;
+    /* Display as a single-column list */
+    grid-template-columns: 1fr;
+    gap: 15px; /* Adjust gap for list view */
 }
