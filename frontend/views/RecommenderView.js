@@ -105,12 +105,14 @@ export function createRecommenderView() {
                     <div class="radio-group">
                         <input type="radio" id="focus-balanced" name="skill-focus" value="balanced" checked>
                         <label for="focus-balanced">Balanced</label>
-                        <input type="radio" id="focus-aim" name="skill-focus" value="aim">
-                        <label for="focus-aim">Aim</label>
+                        <input type="radio" id="focus-jumps" name="skill-focus" value="jumps">
+                        <label for="focus-jumps">Jumps</label>
+                        <input type="radio" id="focus-flow" name="skill-focus" value="flow">
+                        <label for="focus-flow">Flow</label>
                         <input type="radio" id="focus-speed" name="skill-focus" value="speed">
                         <label for="focus-speed">Speed</label>
-                        <input type="radio" id="focus-technical" name="skill-focus" value="technical">
-                        <label for="focus-technical">Technical</label>
+                        <input type="radio" id="focus-stamina" name="skill-focus" value="stamina">
+                        <label for="focus-stamina">Stamina</label>
                     </div>
                 </div>
                 <div class="recommender-actions-wrapper">
