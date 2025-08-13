@@ -1,10 +1,83 @@
-import { getPlayers, getConfig } from './services/api.js';
+import { getPlayers, getConfig, getProgressStatus } from './services/api.js';
 import { createScoresView, loadScores } from './views/ScoresView.js';
 import { createProfileView, loadProfile } from './views/ProfileView.js';
 import { createBeatmapsView, loadBeatmaps } from './views/BeatmapsView.js';
 import { createConfigView } from './views/ConfigView.js';
 import { createRecommenderView } from './views/RecommenderView.js';
 import { stopAudio } from './utils/audioPlayer.js';
+
+let progressInterval = null;
+let lastProgress = {};
+
+function updateGlobalStatus(progress) {
+    const statusMessage = document.getElementById('status-message');
+    const { sync, scan } = progress;
+    let message = '';
+    
+    if (sync.status === 'running') {
+        message = `Syncing: ${sync.current}/${sync.total || '?'}...`;
+    } else if (scan.status === 'running') {
+        message = `Scanning: ${scan.current}/${scan.total || '?'}...`;
+    } else {
+        // Show the message of the most recently completed task
+        const lastSyncCompleted = lastProgress.sync && lastProgress.sync.status !== 'running';
+        const lastScanCompleted = lastProgress.scan && lastProgress.scan.status !== 'running';
+        if (sync.status !== 'idle' && (!lastScanCompleted || lastSyncCompleted)) {
+            message = sync.status === 'complete' ? 'Sync complete.' : `Sync error: ${sync.message}`;
+        } else if (scan.status !== 'idle') {
+            message = scan.status === 'complete' ? 'Scan complete.' : `Scan error: ${scan.message}`;
+        }
+    }
+    statusMessage.textContent = message;
+}
+
+function stopGlobalProgressPolling() {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+    }
+}
+
+async function pollProgress() {
+    try {
+        const progress = await getProgressStatus();
+        
+        document.dispatchEvent(new CustomEvent('progressupdated', { detail: progress }));
+        updateGlobalStatus(progress);
+        
+        const wasSyncRunning = lastProgress.sync && lastProgress.sync.status === 'running';
+        const wasScanRunning = lastProgress.scan && lastProgress.scan.status === 'running';
+
+        if ((wasSyncRunning && progress.sync.status !== 'running') || (wasScanRunning && progress.scan.status !== 'running')) {
+             document.dispatchEvent(new CustomEvent('datachanged', { bubbles: true }));
+        }
+
+        lastProgress = progress;
+
+        if (progress.sync.status !== 'running' && progress.scan.status !== 'running') {
+            stopGlobalProgressPolling();
+            // Clear the message after a few seconds
+            setTimeout(() => {
+                const currentStatus = lastProgress.sync.status !== 'running' && lastProgress.scan.status !== 'running';
+                if(currentStatus) {
+                   document.getElementById('status-message').textContent = '';
+                }
+            }, 5000);
+        }
+    } catch (error) {
+        console.error("Progress polling failed:", error);
+        document.getElementById('status-message').textContent = 'Error fetching status.';
+        stopGlobalProgressPolling();
+    }
+}
+
+function startGlobalProgressPolling() {
+    if (progressInterval) return;
+    lastProgress = {}; // Reset last progress state
+    pollProgress(); // Poll immediately
+    progressInterval = setInterval(pollProgress, 1000);
+}
+
 
 document.addEventListener('DOMContentLoaded', () => {
     const mainContent = document.getElementById('main-content');
@@ -26,6 +99,8 @@ document.addEventListener('DOMContentLoaded', () => {
         views[key].style.display = 'none';
         mainContent.appendChild(views[key]);
     }
+    
+    mainContent.addEventListener('taskstarted', startGlobalProgressPolling);
 
     async function populatePlayerSelector() {
         try {
@@ -59,11 +134,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function switchView(viewName) {
         stopAudio();
-        document.getElementById('status-message').textContent = '';
+        // Don't clear status message on view switch, it's global now
+        // document.getElementById('status-message').textContent = '';
         navLinks.forEach(link => link.classList.remove('active'));
 
         for (const key in views) {
-            views[key].style.display = 'none';
+            const currentView = views[key];
+            if (currentView.style.display === 'block') {
+                 currentView.dispatchEvent(new CustomEvent('viewdeactivated'));
+            }
+            currentView.style.display = 'none';
         }
 
         const view = views[viewName];
@@ -71,8 +151,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (view) {
             view.style.display = 'block';
-            // Dispatch a custom event to notify the view it's being activated.
-            // This is useful for views that need to load data upon display, like Config.
             view.dispatchEvent(new CustomEvent('viewactivated'));
 
             if (viewName === 'scores') loadScores(view);
@@ -90,8 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const viewName = e.target.getAttribute('data-view');
             
             if (viewName === 'profile' && !currentPlayer) {
-                const statusMessage = document.getElementById('status-message');
-                statusMessage.textContent = 'Please select a player to view their profile.';
+                document.getElementById('status-message').textContent = 'Please select a player to view their profile.';
                 return;
             }
 
@@ -127,6 +204,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function initializeApp() {
+        // Check for running tasks on startup
+        const initialProgress = await getProgressStatus();
+        if(initialProgress.sync.status === 'running' || initialProgress.scan.status === 'running') {
+            startGlobalProgressPolling();
+        }
+
         const config = await getConfig();
         currentPlayer = config.default_player;
         await populatePlayerSelector();
