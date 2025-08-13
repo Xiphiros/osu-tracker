@@ -124,60 +124,72 @@ function applyFiltersAndRender(viewElement) {
         }
         case 'top_play_pp': {
             let maxPp = 0;
-            const data = scoresForChart.map(score => { maxPp = Math.max(maxPp, score.pp || 0); return { x: new Date(score.played_at), y: maxPp }; });
+            const data = [];
+            scoresForChart.forEach(score => {
+                if ((score.pp || 0) > maxPp) {
+                    maxPp = score.pp;
+                    data.push({ x: new Date(score.played_at), y: maxPp });
+                }
+            });
             chartJsConfig = {
                 type: 'line',
-                data: { datasets: [{ label: 'Top Play (PP)', data, stepped: true, backgroundColor: 'rgba(0, 170, 255, 0.8)', borderColor: 'rgba(0, 170, 255, 0.5)', borderWidth: 2, pointRadius: 2 }] },
+                data: { datasets: [{ label: 'Top Play (PP)', data, stepped: true, backgroundColor: 'rgba(0, 170, 255, 0.8)', borderColor: 'rgba(0, 170, 255, 0.5)', borderWidth: 2, pointRadius: 3 }] },
                 options: baseChartOptions('Top Play (PP)')
             };
             break;
         }
         case 'daily_avg_pp': {
             const grouped = groupScoresByDay(scoresForChart);
-            const data = Object.keys(grouped).map(date => { const dayScores = grouped[date]; const total = dayScores.reduce((sum, s) => sum + (s.pp || 0), 0); return { x: date, y: total / dayScores.length }; });
+            const data = Object.keys(grouped).sort().map(date => { const dayScores = grouped[date]; const total = dayScores.reduce((sum, s) => sum + (s.pp || 0), 0); return { x: date, y: total / dayScores.length }; });
             chartJsConfig = {
-                type: 'bar',
-                data: { datasets: [{ label: 'Daily Avg PP', data, backgroundColor: 'rgba(0, 170, 255, 0.8)' }] },
+                type: 'line',
+                data: { datasets: [{ label: 'Daily Avg PP', data, backgroundColor: 'rgba(0, 170, 255, 0.8)', borderColor: 'rgba(0, 170, 255, 0.5)', tension: 0.2, pointRadius: 2 }] },
                 options: baseChartOptions('Daily Avg PP')
             };
             break;
         }
         case 'highest_sr': {
             let maxSr = 0;
-            const data = scoresForChart.map(score => { maxSr = Math.max(maxSr, score.stars || 0); return { x: new Date(score.played_at), y: maxSr }; });
+            const data = [];
+             scoresForChart.forEach(score => {
+                if ((score.stars || 0) > maxSr) {
+                    maxSr = score.stars;
+                    data.push({ x: new Date(score.played_at), y: maxSr });
+                }
+            });
             chartJsConfig = {
                 type: 'line',
-                data: { datasets: [{ label: 'Highest SR Passed', data, stepped: true, backgroundColor: 'rgba(0, 170, 255, 0.8)', borderColor: 'rgba(0, 170, 255, 0.5)', borderWidth: 2, pointRadius: 2 }] },
+                data: { datasets: [{ label: 'Highest SR Passed', data, stepped: true, backgroundColor: 'rgba(0, 170, 255, 0.8)', borderColor: 'rgba(0, 170, 255, 0.5)', borderWidth: 2, pointRadius: 3 }] },
                 options: baseChartOptions('Highest SR Passed')
             };
             break;
         }
         case 'daily_avg_sr': {
             const grouped = groupScoresByDay(scoresForChart);
-            const data = Object.keys(grouped).map(date => { const dayScores = grouped[date]; const total = dayScores.reduce((sum, s) => sum + (s.stars || 0), 0); return { x: date, y: total / dayScores.length }; });
+            const data = Object.keys(grouped).sort().map(date => { const dayScores = grouped[date]; const total = dayScores.reduce((sum, s) => sum + (s.stars || 0), 0); return { x: date, y: total / dayScores.length }; });
             chartJsConfig = {
-                type: 'bar',
-                data: { datasets: [{ label: 'Daily Avg SR', data, backgroundColor: 'rgba(0, 170, 255, 0.8)' }] },
+                type: 'line',
+                data: { datasets: [{ label: 'Daily Avg SR', data, backgroundColor: 'rgba(0, 170, 255, 0.8)', borderColor: 'rgba(0, 170, 255, 0.5)', tension: 0.2, pointRadius: 2 }] },
                 options: baseChartOptions('Daily Avg SR')
             };
             break;
         }
         case 'daily_avg_acc': {
             const grouped = groupScoresByDay(scoresForChart);
-            const data = Object.keys(grouped).map(date => { const dayScores = grouped[date]; const total = dayScores.reduce((sum, s) => sum + calculateAccuracy(s), 0); return { x: date, y: total / dayScores.length }; });
+            const data = Object.keys(grouped).sort().map(date => { const dayScores = grouped[date]; const total = dayScores.reduce((sum, s) => sum + calculateAccuracy(s), 0); return { x: date, y: total / dayScores.length }; });
             chartJsConfig = {
-                type: 'bar',
-                data: { datasets: [{ label: 'Daily Avg Accuracy (%)', data, backgroundColor: 'rgba(0, 170, 255, 0.8)' }] },
+                type: 'line',
+                data: { datasets: [{ label: 'Daily Avg Accuracy (%)', data, backgroundColor: 'rgba(0, 170, 255, 0.8)', borderColor: 'rgba(0, 170, 255, 0.5)', tension: 0.2, pointRadius: 2 }] },
                 options: baseChartOptions('Daily Avg Accuracy (%)')
             };
             break;
         }
         case 'play_count': {
             const grouped = groupScoresByDay(scoresForChart);
-            const data = Object.keys(grouped).map(date => ({ x: date, y: grouped[date].length }));
+            const data = Object.keys(grouped).sort().map(date => ({ x: date, y: grouped[date].length }));
             chartJsConfig = {
-                type: 'bar',
-                data: { datasets: [{ label: 'Daily Play Count', data, backgroundColor: 'rgba(0, 170, 255, 0.8)' }] },
+                type: 'line',
+                data: { datasets: [{ label: 'Daily Play Count', data, backgroundColor: 'rgba(0, 170, 255, 0.8)', borderColor: 'rgba(0, 170, 255, 0.5)', tension: 0.2, pointRadius: 2 }] },
                 options: baseChartOptions('Daily Play Count')
             };
             break;
@@ -214,8 +226,18 @@ function applyFiltersAndRender(viewElement) {
             const labels = sortedBuckets.map(b => `${b} - ${(parseFloat(b) + 0.49).toFixed(1)} ★`);
             const data = sortedBuckets.map(b => starCounts[b]);
             chartJsConfig = {
-                type: 'bar',
-                data: { labels, datasets: [{ label: 'Play Count', data, backgroundColor: 'rgba(0, 170, 255, 0.8)' }] },
+                type: 'line',
+                data: { 
+                    labels, 
+                    datasets: [{ 
+                        label: 'Play Count', 
+                        data, 
+                        backgroundColor: 'rgba(0, 170, 255, 0.5)',
+                        borderColor: 'rgba(0, 170, 255, 0.8)',
+                        fill: true,
+                        tension: 0.2
+                    }] 
+                },
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     scales: {
