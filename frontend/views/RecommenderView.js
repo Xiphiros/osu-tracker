@@ -352,22 +352,19 @@ export function createRecommenderView() {
         const currentStep = sessionQueue[currentStepIndex];
 		const mods = getIntFromMods(currentStep.mods);
 		const params = {
-			mods: mods,
-			min_acc: currentStep.goals.acc,
-			min_score: currentStep.goals.useSv2 ? currentStep.goals.score : null,
-			max_misses: currentStep.goals.misses
+			mods: mods
 		};
 
 		suggestSrButton.disabled = true;
 		suggestSrButton.textContent = '...';
-		statusMessage.textContent = 'Analyzing plays...';
+		statusMessage.textContent = 'Analyzing recent plays...';
 
 		try {
 			const result = await getSuggestedSr(playerName, params);
 			const suggestedSr = result.suggested_sr;
 			srInput.value = suggestedSr.toFixed(1);
 			localStorage.setItem('recommender_sr', srInput.value);
-			statusMessage.textContent = `Suggestion based on ${result.plays_considered} plays: ${suggestedSr.toFixed(2)} ★`;
+			statusMessage.textContent = `Suggestion based on your last ${result.plays_considered} plays: ${suggestedSr.toFixed(2)} ★`;
 		} catch (error) {
 			statusMessage.textContent = `Error: ${error.message}`;
 		} finally {
@@ -453,9 +450,7 @@ export function createRecommenderView() {
         srInput.value = newSr;
         localStorage.setItem('recommender_sr', newSr);
         
-        if (passed) {
-            currentStepCompletedCount++;
-        }
+        currentStepCompletedCount++;
 
         updateSessionProgressDisplay();
         resetMapFinder();
