@@ -113,11 +113,13 @@ def get_recommendation():
         target_sr = request.args.get('sr', type=float)
         max_bpm = request.args.get('bpm', type=int)
         mods = request.args.get('mods', 0, type=int)
+        exclude_str = request.args.get('exclude', '')
+        excluded_ids = exclude_str.split(',') if exclude_str else []
         
         if target_sr is None or max_bpm is None:
             return jsonify({"error": "Missing 'sr' or 'bpm' parameters."}), 400
 
-        beatmap = database.get_recommendation(target_sr, max_bpm, mods)
+        beatmap = database.get_recommendation(target_sr, max_bpm, mods, excluded_ids)
         
         if beatmap:
             return jsonify(beatmap)
