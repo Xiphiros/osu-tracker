@@ -1,6 +1,7 @@
 import { getReplays, scanReplays, getPlayers } from './services/api.js';
 import { createScoresView, loadScores } from './views/ScoresView.js';
 import { createProfileView, loadProfile } from './views/ProfileView.js';
+import { createBeatmapsView, loadBeatmaps } from './views/BeatmapsView.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const mainContent = document.getElementById('main-content');
@@ -14,8 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const views = {
         scores: createScoresView(),
         profile: createProfileView(),
-        beatmaps: createStubView('Beatmaps'),
-        // The old 'profile' link will now be handled by the player selector
+        beatmaps: createBeatmapsView(),
     };
     
     // Add all views to the DOM, but keep them hidden initially
@@ -74,6 +74,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadScores(view);
             } else if (viewName === 'profile') {
                 loadProfile(view, currentPlayer);
+            } else if (viewName === 'beatmaps') {
+                loadBeatmaps(view);
             }
         }
         if (link) {
@@ -110,6 +112,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     loadScores(views.scores);
                 } else if (viewName === 'profile' && currentPlayer) {
                     loadProfile(views.profile, currentPlayer);
+                } else if (viewName === 'beatmaps') {
+                    loadBeatmaps(views.beatmaps);
                 }
             }
 
