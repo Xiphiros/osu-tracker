@@ -1,9 +1,11 @@
 import { getReplays, getPlayerStats } from '../services/api.js';
 import { createReplayCard } from '../components/ReplayCard.js';
-import { getModsFromInt } from '../utils/mods.js'; // Import from new utility file
+import { getModsFromInt } from '../utils/mods.js';
 
 let allScores = [];
 let viewInitialized = false;
+let profileChart = null;
+let currentChartType = 'pp';
 const activeModFilters = new Set();
 
 // --- Helper Functions ---
@@ -11,6 +13,69 @@ function calculateAccuracy(replay) {
     const totalHits = replay.num_300s + replay.num_100s + replay.num_50s + replay.num_misses;
     if (totalHits === 0) return 0;
     return ((replay.num_300s * 300 + replay.num_100s * 100 + replay.num_50s * 50) / (totalHits * 300)) * 100;
+}
+
+function renderProfileChart(scores, type) {
+    const chartWrapper = document.getElementById('chart-wrapper');
+    if (!chartWrapper) return;
+    chartWrapper.style.display = scores.length > 0 ? 'block' : 'none';
+
+    if (profileChart) {
+        profileChart.destroy();
+    }
+    if (scores.length === 0) return;
+
+    const ctx = document.getElementById('profile-chart').getContext('2d');
+    const chartLabel = type === 'pp' ? 'PP Over Time' : 'Star Rating Over Time';
+    const chartData = scores.map(s => (type === 'pp' ? s.pp : s.stars) || 0);
+    const pointColor = type === 'pp' ? 'rgba(0, 170, 255, 0.8)' : 'rgba(255, 204, 34, 0.8)';
+    const lineColor = type === 'pp' ? 'rgba(0, 170, 255, 0.5)' : 'rgba(255, 204, 34, 0.5)';
+
+    profileChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: scores.map(s => new Date(s.played_at)),
+            datasets: [{
+                label: chartLabel,
+                data: chartData,
+                backgroundColor: pointColor,
+                borderColor: lineColor,
+                borderWidth: 2,
+                pointRadius: 3,
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'month',
+                        tooltipFormat: 'MMM yyyy',
+                        displayFormats: { month: 'MMM yyyy' }
+                    },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    ticks: { color: '#ccc' }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    ticks: { color: '#ccc' }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: context => new Date(context[0].parsed.x).toLocaleDateString(),
+                        label: context => `${type.toUpperCase()}: ${context.parsed.y.toFixed(2)}`
+                    }
+                }
+            }
+        }
+    });
 }
 
 // --- Main View and Logic ---
@@ -30,7 +95,6 @@ function applyFiltersAndRender(viewElement) {
 
     let filteredScores = allScores;
 
-    // Mod filtering
     if (activeModFilters.size > 0) {
         filteredScores = filteredScores.filter(replay => {
             const replayMods = new Set(getModsFromInt(replay.mods_used));
@@ -41,7 +105,6 @@ function applyFiltersAndRender(viewElement) {
         });
     }
 
-    // Numerical range filtering
     filteredScores = filteredScores.filter(replay => {
         const acc = calculateAccuracy(replay);
         const stars = replay.stars || 0;
@@ -52,7 +115,6 @@ function applyFiltersAndRender(viewElement) {
                bpm >= minBpm && bpm <= maxBpm;
     });
 
-    // --- Analytics Calculation ---
     if (filteredScores.length > 0) {
         const scoresForAnalytics = [...filteredScores].sort((a, b) => (b.stars || 0) - (a.stars || 0)).slice(0, 100);
         const totalStars = scoresForAnalytics.reduce((sum, score) => sum + (score.stars || 0), 0);
@@ -66,7 +128,9 @@ function applyFiltersAndRender(viewElement) {
         `;
     }
 
-    // Main sorting for display
+    const scoresForChart = [...filteredScores].sort((a, b) => new Date(a.played_at) - new Date(b.played_at));
+    renderProfileChart(scoresForChart, currentChartType);
+
     filteredScores.sort((a, b) => {
         switch (sortValue) {
             case 'pp': return (b.pp || 0) - (a.pp || 0);
@@ -116,6 +180,15 @@ export function createProfileView() {
                 </div>
             </div>
         </div>
+        <div id="chart-section">
+            <div class="chart-controls">
+                <button id="chart-btn-pp" class="active">PP Graph</button>
+                <button id="chart-btn-sr">SR Graph</button>
+            </div>
+            <div id="chart-wrapper" class="chart-wrapper">
+                <canvas id="profile-chart"></canvas>
+            </div>
+        </div>
         <div id="profile-replays-container"></div>
     `;
     return view;
@@ -143,13 +216,30 @@ export async function loadProfile(viewElement, playerName) {
         viewElement.querySelectorAll('#sort-select, #acc-filter-min, #acc-filter-max, #stars-filter-min, #bpm-filter-min, #bpm-filter-max, #exact-mod-match-toggle').forEach(el => {
             el.addEventListener('input', () => applyFiltersAndRender(viewElement));
         });
+
+        const ppBtn = viewElement.querySelector('#chart-btn-pp');
+        const srBtn = viewElement.querySelector('#chart-btn-sr');
+
+        ppBtn.addEventListener('click', () => {
+            currentChartType = 'pp';
+            ppBtn.classList.add('active');
+            srBtn.classList.remove('active');
+            applyFiltersAndRender(viewElement);
+        });
+        srBtn.addEventListener('click', () => {
+            currentChartType = 'sr';
+            srBtn.classList.add('active');
+            ppBtn.classList.remove('active');
+            applyFiltersAndRender(viewElement);
+        });
+        
         viewInitialized = true;
     }
 
     try {
         const [stats, replaysData] = await Promise.all([
             getPlayerStats(playerName), 
-            getReplays(playerName, 1, 100000) // Fetch all scores for the profile view
+            getReplays(playerName, 1, 100000)
         ]);
 
         statsContainer.innerHTML = `
