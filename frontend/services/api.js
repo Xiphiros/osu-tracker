@@ -12,6 +12,18 @@ export const getReplays = async (playerName = null, page = 1, limit = 50) => {
     return response.json();
 };
 
+export const getLatestReplay = async (playerName) => {
+    if (!playerName) throw new Error("Player name is required.");
+    const response = await fetch(`${API_BASE_URL}/replays/latest?player_name=${encodeURIComponent(playerName)}`);
+    if (response.status === 404) {
+        return null;
+    }
+    if (!response.ok) {
+        throw new Error('Failed to fetch latest replay.');
+    }
+    return response.json();
+};
+
 export const getPlayers = async () => {
     const response = await fetch(`${API_BASE_URL}/players`);
     if (!response.ok) {
