@@ -121,6 +121,63 @@ def get_player_stats(player_name):
     }
     return jsonify(stats)
 
+def _calculate_accuracy(replay):
+    """Helper to calculate osu!standard accuracy from a replay dict."""
+    if replay.get('game_mode') == 0:
+        total_hits = replay.get('num_300s', 0) + replay.get('num_100s', 0) + replay.get('num_50s', 0) + replay.get('num_misses', 0)
+        if total_hits == 0:
+            return 0.0
+        return ((replay.get('num_300s', 0) * 300 + replay.get('num_100s', 0) * 100 + replay.get('num_50s', 0) * 50) / (total_hits * 300)) * 100
+    return 0.0
+
+@app.route('/api/players/<player_name>/suggest-sr', methods=['GET'])
+def suggest_sr(player_name):
+    """Suggests a starting SR based on historical plays and goal criteria."""
+    mods = request.args.get('mods', 0, type=int)
+    min_acc = request.args.get('min_acc', type=float)
+    min_score = request.args.get('min_score', type=int)
+    max_misses = request.args.get('max_misses', type=int)
+    
+    replays = database.get_all_replays(player_name=player_name, limit=100000)['replays']
+    
+    valid_plays = []
+    SCORE_V2_MOD = 536870912
+
+    for r in replays:
+        if r.get('stars') is None or r.get('game_mode') != 0:
+            continue
+            
+        # Check if the play's mods are a superset of the required mods
+        if (r.get('mods_used', 0) & mods) != mods:
+            continue
+            
+        if min_acc is not None:
+            if _calculate_accuracy(r) < min_acc:
+                continue
+
+        if min_score is not None:
+            if (r.get('mods_used', 0) & SCORE_V2_MOD) == 0:
+                continue 
+            if r.get('total_score', 0) < min_score:
+                continue
+        
+        if max_misses is not None:
+            if r.get('num_misses', 0) > max_misses:
+                continue
+                
+        valid_plays.append(r)
+        
+    if not valid_plays:
+        return jsonify({"message": "No plays found matching your criteria."}), 404
+        
+    valid_plays.sort(key=lambda p: p['stars'], reverse=True)
+    top_plays = valid_plays[:100]
+    
+    total_sr = sum(p['stars'] for p in top_plays)
+    average_sr = total_sr / len(top_plays)
+    
+    return jsonify({"suggested_sr": average_sr, "plays_considered": len(top_plays)})
+
 @app.route('/api/recommend', methods=['GET'])
 def get_recommendation():
     """API endpoint to recommend a beatmap based on SR and BPM."""
