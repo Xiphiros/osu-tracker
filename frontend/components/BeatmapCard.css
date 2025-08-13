@@ -111,6 +111,7 @@
 
 .beatmap-card .stat-item .value {
     color: white;
+    font-weight: 500;
 }
 
 .beatmap-card .card-footer-stats {
@@ -127,6 +128,10 @@
 .beatmap-card .card-footer-stats .label {
     margin-right: 8px;
 }
+
+.beatmap-card .stat-aim { color: #88ccff; }
+.beatmap-card .stat-speed { color: #ff8888; }
+
 
 #beatmaps-container {
     display: grid;
