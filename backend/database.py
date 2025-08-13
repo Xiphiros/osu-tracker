@@ -496,6 +496,8 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[], focus=None):
         modded_map_attrs = attr_builder.build()
 
         beatmap['stars'] = round(diff_attrs.stars, 2)
+        beatmap['aim'] = round(diff_attrs.aim, 2)
+        beatmap['speed'] = round(diff_attrs.speed, 2)
         beatmap['bpm'] = round(beatmap['bpm'] * modded_map_attrs.clock_rate)
         beatmap['ar'] = round(modded_map_attrs.ar, 2)
         beatmap['cs'] = round(modded_map_attrs.cs, 2)
