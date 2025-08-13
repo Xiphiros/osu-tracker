@@ -3,6 +3,7 @@ import { createScoresView, loadScores } from './views/ScoresView.js';
 import { createProfileView, loadProfile } from './views/ProfileView.js';
 import { createBeatmapsView, loadBeatmaps } from './views/BeatmapsView.js';
 import { createConfigView } from './views/ConfigView.js';
+import { stopAudio } from './utils/audioPlayer.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const mainContent = document.getElementById('main-content');
@@ -53,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function switchView(viewName) {
+        stopAudio(); // Stop any playing music when changing views
         document.querySelectorAll('#main-content .view').forEach(v => v.classList.remove('active'));
         navLinks.forEach(link => link.classList.remove('active'));
 
