@@ -58,12 +58,40 @@ def init_db():
             bpm_max REAL
         )
     ''')
+
+    # New beatmaps table to store map details persistently.
+    # md5_hash is the primary key as it's the natural unique identifier.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS beatmaps (
+            md5_hash TEXT PRIMARY KEY,
+            artist TEXT,
+            title TEXT,
+            creator TEXT,
+            difficulty TEXT,
+            folder_name TEXT,
+            osu_file_name TEXT,
+            grades TEXT,
+            last_played_date TEXT,
+            num_hitcircles INTEGER,
+            num_sliders INTEGER,
+            num_spinners INTEGER,
+            ar REAL,
+            cs REAL,
+            hp REAL,
+            od REAL,
+            bpm REAL,
+            audio_file TEXT,
+            background_file TEXT,
+            bpm_min REAL,
+            bpm_max REAL
+        )
+    ''')
     
     conn.commit()
     _migrate_db(conn)
     conn.close()
     print("Database initialized and migrated successfully.")
-
+    
 def add_replay(replay_data):
     """Adds a new replay or updates it if calculated data was missing."""
     conn = get_db_connection()
@@ -123,7 +151,7 @@ def add_replay(replay_data):
     
     conn.commit()
     conn.close()
-     
+
 def get_all_replays(player_name=None):
     """Retrieves all replay records from the database, optionally filtering by player name."""
     conn = get_db_connection()
