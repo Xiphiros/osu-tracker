@@ -115,16 +115,18 @@
     color: white;
 }
 
-.beatmap-card .bpm-stat {
+.beatmap-card .card-footer-stats {
     grid-column: span 2;
-    text-align: center;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
     font-size: 1em;
     padding-top: 8px;
     margin-top: 5px;
     border-top: 1px solid rgba(255,255,255,0.1);
 }
 
-.beatmap-card .bpm-stat .label {
+.beatmap-card .card-footer-stats .label {
     margin-right: 8px;
 }
 
