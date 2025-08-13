@@ -124,7 +124,6 @@ def scan_replays_folder():
         sync_local_beatmaps()
         logging.info("Beatmap database sync complete.")
 
-        # Fetch all beatmaps into memory for quick lookups during the scan
         all_beatmaps = {b['md5_hash']: b for b in database.get_all_beatmaps()}
 
         replay_files = [f for f in os.listdir(replays_path) if f.endswith('.osr')]
@@ -133,10 +132,6 @@ def scan_replays_folder():
             try:
                 replay_data = parser.parse_replay_file(file_path)
                 if not replay_data or not replay_data.get('replay_md5'): continue
-                
-                # The logic to check for existing replays is now handled by the
-                # "INSERT ... ON CONFLICT" query in `database.add_replay`,
-                # which is more efficient. We just process every file.
                 
                 replay_data.update({'pp': None, 'stars': None, 'map_max_combo': None, 'bpm': None, 'bpm_min': None, 'bpm_max': None})
                 beatmap_info = all_beatmaps.get(replay_data['beatmap_md5'])
@@ -149,6 +144,9 @@ def scan_replays_folder():
                         
                         osu_details = parser.parse_osu_file(osu_file_path)
                         replay_data.update(osu_details)
+
+                        # Persist the newly parsed details to the beatmaps table
+                        database.update_beatmap_details(replay_data['beatmap_md5'], osu_details)
                         
                 database.add_replay(replay_data)
             except Exception as e:
