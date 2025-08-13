@@ -91,7 +91,7 @@ def init_db():
     _migrate_db(conn)
     conn.close()
     print("Database initialized and migrated successfully.")
-    
+
 def add_replay(replay_data):
     """Adds a new replay or updates it if calculated data was missing."""
     conn = get_db_connection()
@@ -178,6 +178,48 @@ def get_unique_players():
     players = [row['player_name'] for row in cursor.fetchall()]
     conn.close()
     return players
+
+def get_all_beatmaps():
+    """Retrieves all beatmap records from the database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM beatmaps")
+    beatmaps = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return beatmaps
+
+def add_or_update_beatmaps(beatmaps_data):
+    """
+    Inserts or updates a batch of beatmaps in the database.
+    This uses an 'upsert' mechanism to be efficient.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    beatmap_tuples = []
+    for md5, data in beatmaps_data.items():
+        beatmap_tuples.append((
+            md5, data.get('artist'), data.get('title'), data.get('creator'), 
+            data.get('difficulty'), data.get('folder_name'), data.get('osu_file_name'),
+            str(data.get('grades', {})), data.get('last_played_date'),
+            data.get('num_hitcircles'), data.get('num_sliders'), data.get('num_spinners'),
+            data.get('ar'), data.get('cs'), data.get('hp'), data.get('od'), data.get('bpm')
+        ))
+
+    # Using INSERT OR IGNORE as we only want to add new maps from osu!.db
+    # We don't want to overwrite potentially richer data from an API in the future.
+    cursor.executemany('''
+        INSERT OR IGNORE INTO beatmaps (
+            md5_hash, artist, title, creator, difficulty, folder_name, osu_file_name,
+            grades, last_played_date, num_hitcircles, num_sliders, num_spinners,
+            ar, cs, hp, od, bpm
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', beatmap_tuples)
+    
+    conn.commit()
+    logging.info(f"Database sync complete. Processed {len(beatmap_tuples)} beatmaps. "
+                 f"({cursor.rowcount} new entries added)")
+    conn.close()
 
 def update_replay_pp(replay_md5, pp, stars, map_max_combo):
     """Updates the pp, stars, and map_max_combo for an existing replay record."""
