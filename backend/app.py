@@ -46,21 +46,62 @@ TASK_PROGRESS = {
 def _add_rank_to_replay(replay):
     """
     Calculates and adds the rank to a replay dictionary in-place.
-    The rank is determined by the grade saved in the beatmap's metadata.
+    For osu!standard, it calculates from score stats. For other modes, it uses the grade from osu!.db.
     """
+    beatmap_info = replay.get('beatmap', {})
+    game_mode = replay.get('game_mode')
+
+    # --- Live Rank Calculation for osu!standard (mode 0) ---
+    if game_mode == 0:
+        n300 = replay.get('num_300s', 0)
+        n100 = replay.get('num_100s', 0)
+        n50 = replay.get('num_50s', 0)
+        n_miss = replay.get('num_misses', 0)
+
+        num_circles = beatmap_info.get('num_hitcircles')
+        num_sliders = beatmap_info.get('num_sliders')
+        num_spinners = beatmap_info.get('num_spinners')
+        
+        # Check if we have the necessary info from the beatmap
+        if num_circles is not None and num_sliders is not None and num_spinners is not None:
+            total_objects = num_circles + num_sliders + num_spinners
+
+            if total_objects > 0:
+                # This check ensures the replay matches the map version we have
+                if (n300 + n100 + n50 + n_miss) == total_objects:
+                    ratio_300 = n300 / total_objects
+                    ratio_50 = n50 / total_objects
+                    accuracy = (n300 * 300 + n100 * 100 + n50 * 50) / (total_objects * 300)
+
+                    if accuracy == 1.0:
+                        replay['rank'] = "SS"
+                        return
+                    if ratio_300 > 0.9 and ratio_50 < 0.01 and n_miss == 0:
+                        replay['rank'] = "S"
+                        return
+                    if (ratio_300 > 0.8 and n_miss == 0) or (ratio_300 > 0.9):
+                        replay['rank'] = "A"
+                        return
+                    if (ratio_300 > 0.7 and n_miss == 0) or (ratio_300 > 0.8):
+                        replay['rank'] = "B"
+                        return
+                    if ratio_300 > 0.6:
+                        replay['rank'] = "C"
+                        return
+                    replay['rank'] = "D"
+                    return
+
+    # --- Fallback to osu!.db grade for other modes or if live calc fails ---
     def get_rank_from_grade(grade_val):
-        # Maps grade values from osu!.db to letter ranks
         ranks = {0: "SS", 1: "S", 2: "SS", 3: "S", 4: "A", 5: "B", 6: "C", 7: "D"}
         return ranks.get(grade_val, "N/A")
 
-    beatmap_info = replay.get('beatmap', {})
     try:
         grades_str = beatmap_info.get('grades')
         grades = json.loads(grades_str) if grades_str else {}
     except (json.JSONDecodeError, TypeError):
         grades = {}
 
-    game_mode = replay.get('game_mode')
     grade_val = -1
     if game_mode == 0: grade_val = grades.get('osu')
     elif game_mode == 1: grade_val = grades.get('taiko')
