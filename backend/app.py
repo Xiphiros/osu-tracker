@@ -30,7 +30,7 @@ else:
 
 app = Flask(__name__, static_folder=static_folder_path, static_url_path='')
 CORS(app)
-BEATMAP_CACHE = {}
+# The global BEATMAP_CACHE is no longer needed. Data is in the database.
 
 @app.route('/api/replays', methods=['GET'])
 def get_replays():
@@ -46,61 +46,63 @@ def get_replays():
         ranks = {0:"SS", 1:"S", 2:"SS", 3:"S", 4:"A", 5:"B", 6:"C", 7:"D"}
         return ranks.get(grade_val, "N/A")
 
+    # The database now returns fully enriched replays.
     all_replays = database.get_all_replays(player_name=player_name)
-    enriched_replays = []
+    
+    # Post-process to add dynamic data not stored in the DB (like rank)
     for replay in all_replays:
-        beatmap_info = BEATMAP_CACHE.get(replay['beatmap_md5'])
-        enriched_replay = dict(replay)
-        
-        if beatmap_info:
-            enriched_replay['beatmap'] = beatmap_info.copy()
+        beatmap_info = replay.get('beatmap')
+        if not beatmap_info:
+            replay['rank'] = "N/A"
+            continue
 
-            if enriched_replay.get('bpm') is not None:
-                enriched_replay['beatmap']['bpm'] = enriched_replay['bpm']
-            if enriched_replay.get('bpm_min') is not None:
-                enriched_replay['beatmap']['bpm_min'] = enriched_replay['bpm_min']
-            if enriched_replay.get('bpm_max') is not None:
-                enriched_replay['beatmap']['bpm_max'] = enriched_replay['bpm_max']
+        try:
+            # Grades are stored as a string representation of a dict, e.g., "{'osu': 4}"
+            grades = eval(beatmap_info.get('grades', '{}'))
+        except:
+            grades = {}
 
-            game_mode = enriched_replay.get('game_mode')
-            grades = beatmap_info.get('grades', {})
-            grade_val = -1
-            if game_mode == 0: grade_val = grades.get('osu')
-            elif game_mode == 1: grade_val = grades.get('taiko')
-            elif game_mode == 2: grade_val = grades.get('ctb')
-            elif game_mode == 3: grade_val = grades.get('mania')
-            enriched_replay['rank'] = get_rank(grade_val)
-            
+        game_mode = replay.get('game_mode')
+        grade_val = -1
+        if game_mode == 0: grade_val = grades.get('osu')
+        elif game_mode == 1: grade_val = grades.get('taiko')
+        elif game_mode == 2: grade_val = grades.get('ctb')
+        elif game_mode == 3: grade_val = grades.get('mania')
+        replay['rank'] = get_rank(grade_val)
+
+        # This back-filling logic is still valuable for replays on maps that
+        # might not be in the database yet, or for calculating PP on the fly.
+        if beatmap_info and beatmap_info.get('folder_name'):
             osu_file_path = os.path.join(
                 songs_path, beatmap_info['folder_name'], beatmap_info['osu_file_name']
             )
 
             if os.path.exists(osu_file_path):
-                logging.debug(f"Processing replay for beatmap: {beatmap_info.get('osu_file_name')}")
-                osu_details = parser.parse_osu_file(osu_file_path)
-                logging.debug(f"Parsed .osu details: {osu_details}")
-
-                if enriched_replay.get('pp') is None:
-                    pp_info = parser.calculate_pp(osu_file_path, enriched_replay)
+                # Back-fill PP if it's missing from the replay record
+                if replay.get('pp') is None:
+                    pp_info = parser.calculate_pp(osu_file_path, replay)
                     if pp_info and pp_info.get('pp') is not None:
-                        enriched_replay.update(pp_info)
+                        replay.update(pp_info)
                         database.update_replay_pp(
-                            enriched_replay['replay_md5'], pp_info['pp'], pp_info['stars'], pp_info['map_max_combo']
+                            replay['replay_md5'], pp_info['pp'], pp_info['stars'], pp_info['map_max_combo']
                         )
 
-                if enriched_replay['beatmap'].get('bpm_min') is None and osu_details.get('bpm') is not None:
-                    database.update_replay_bpm(
-                        enriched_replay['replay_md5'],
-                        osu_details.get('bpm'),
-                        osu_details.get('bpm_min'),
-                        osu_details.get('bpm_max')
-                    )
-                
-                enriched_replay['beatmap'].update(osu_details)
-                logging.debug(f"Final enriched beatmap object for response: {enriched_replay['beatmap']}")
+                # Back-fill detailed BPM if it's missing
+                if replay['beatmap'].get('bpm_min') is None:
+                    osu_details = parser.parse_osu_file(osu_file_path)
+                    if osu_details.get('bpm') is not None:
+                        # Update the database for both the replay and the beatmap table
+                        database.update_replay_bpm(
+                            replay['replay_md5'],
+                            osu_details.get('bpm'),
+                            osu_details.get('bpm_min'),
+                            osu_details.get('bpm_max')
+                        )
+                        # We don't have a specific beatmap update function for this yet,
+                        # but this could be added in the future.
+                        replay['beatmap'].update(osu_details)
 
-        enriched_replays.append(enriched_replay)
-    return jsonify(enriched_replays)
+    return jsonify(all_replays)
 
 @app.route('/api/players', methods=['GET'])
 def get_players():
@@ -155,9 +157,13 @@ def scan_replays_folder():
     if not os.path.isdir(replays_path):
         return jsonify({"error": f"Replays directory not found at: {replays_path}"}), 404
     try:
-        logging.info("Refreshing beatmap cache before scan...")
-        load_beatmap_cache()
-        logging.info("Beatmap cache refreshed.")
+        logging.info("Syncing local beatmap database before scan...")
+        sync_local_beatmaps()
+        logging.info("Beatmap database sync complete.")
+
+        all_replays = database.get_all_replays()
+        existing_replays = {r['replay_md5']: r for r in all_replays}
+        all_beatmaps = {b['md5_hash']: b for b in database.get_all_beatmaps()} # Assumes a get_all_beatmaps function
 
         replay_files = [f for f in os.listdir(replays_path) if f.endswith('.osr')]
         for file_name in replay_files:
@@ -166,14 +172,18 @@ def scan_replays_folder():
                 replay_data = parser.parse_replay_file(file_path)
                 if not replay_data or not replay_data.get('replay_md5'): continue
                 
+                # Skip if replay exists and has PP data
+                existing = existing_replays.get(replay_data['replay_md5'])
+                if existing and existing.get('pp') is not None:
+                    continue
+
                 # Initialize fields
                 replay_data.update({'pp': None, 'stars': None, 'map_max_combo': None, 'bpm': None, 'bpm_min': None, 'bpm_max': None})
-                beatmap_info = BEATMAP_CACHE.get(replay_data['beatmap_md5'])
+                beatmap_info = all_beatmaps.get(replay_data['beatmap_md5'])
                 
                 if beatmap_info:
                     osu_file_path = os.path.join(songs_path, beatmap_info['folder_name'], beatmap_info['osu_file_name'])
                     if os.path.exists(osu_file_path):
-                        # Enrich with PP and detailed BPM info before storing
                         pp_info = parser.calculate_pp(osu_file_path, replay_data)
                         replay_data.update(pp_info)
                         
@@ -195,19 +205,20 @@ def serve_index(path):
         return send_from_directory(app.static_folder, path)
     return send_from_directory(app.static_folder, 'index.html')
 
-def load_beatmap_cache():
-    global BEATMAP_CACHE
+def sync_local_beatmaps():
+    """Parses osu!.db and syncs the data with the local application database."""
     osu_folder = os.getenv('OSU_FOLDER')
     if not osu_folder:
-        logging.warning("OSU_FOLDER not set. Cannot load beatmap cache.")
+        logging.warning("OSU_FOLDER not set. Cannot sync beatmap database.")
         return
     db_path = os.path.join(osu_folder, 'osu!.db')
     if not os.path.exists(db_path):
-        logging.warning(f"osu!.db not found at {db_path}. Cannot load beatmap cache.")
+        logging.warning(f"osu!.db not found at {db_path}. Cannot sync beatmap database.")
         return
-    logging.info("Loading beatmap cache from osu!.db...")
-    BEATMAP_CACHE = parser.parse_osu_db(db_path)
-    logging.info(f"Beatmap cache loaded with {len(BEATMAP_CACHE)} entries.")
+    logging.info("Parsing beatmap data from osu!.db...")
+    beatmap_data = parser.parse_osu_db(db_path)
+    logging.info(f"Found {len(beatmap_data)} beatmaps. Syncing with application database...")
+    database.add_or_update_beatmaps(beatmap_data)
 
 def run_server():
     """Runs the Flask server in a dedicated thread."""
@@ -219,7 +230,7 @@ def run_server():
 
 if __name__ == '__main__':
     database.init_db()
-    load_beatmap_cache()
+    sync_local_beatmaps() # Sync on startup
 
     server_thread = threading.Thread(target=run_server)
     server_thread.daemon = True
