@@ -41,22 +41,26 @@ TASK_PROGRESS = {
 
 @app.route('/api/beatmaps', methods=['GET'])
 def get_beatmaps():
-    """API endpoint to get all stored beatmap data."""
-    beatmaps = database.get_all_beatmaps()
-    return jsonify(beatmaps)
+    """API endpoint to get a paginated list of stored beatmap data."""
+    page = request.args.get('page', 1, type=int)
+    limit = request.args.get('limit', 50, type=int)
+    beatmaps_data = database.get_all_beatmaps(page=page, limit=limit)
+    return jsonify(beatmaps_data)
 
 @app.route('/api/replays', methods=['GET'])
 def get_replays():
-    """API endpoint to get all stored replay data, enriched with beatmap details."""
+    """API endpoint to get a paginated list of stored replay data."""
     player_name = request.args.get('player_name')
+    page = request.args.get('page', 1, type=int)
+    limit = request.args.get('limit', 50, type=int)
     
     def get_rank(grade_val):
         ranks = {0:"SS", 1:"S", 2:"SS", 3:"S", 4:"A", 5:"B", 6:"C", 7:"D"}
         return ranks.get(grade_val, "N/A")
 
-    all_replays = database.get_all_replays(player_name=player_name)
+    replays_data = database.get_all_replays(player_name=player_name, page=page, limit=limit)
     
-    for replay in all_replays:
+    for replay in replays_data['replays']:
         beatmap_info = replay.get('beatmap', {})
         try:
             grades_str = beatmap_info.get('grades')
@@ -72,7 +76,7 @@ def get_replays():
         elif game_mode == 3: grade_val = grades.get('mania')
         replay['rank'] = get_rank(grade_val)
 
-    return jsonify(all_replays)
+    return jsonify(replays_data)
 
 @app.route('/api/players', methods=['GET'])
 def get_players():
@@ -81,7 +85,9 @@ def get_players():
 
 @app.route('/api/players/<player_name>/stats', methods=['GET'])
 def get_player_stats(player_name):
-    replays = database.get_all_replays(player_name=player_name)
+    # Note: This still fetches all replays for stat calculation, which is correct.
+    # We only paginate the display lists.
+    replays = database.get_all_replays(player_name=player_name, limit=10000)['replays']
     if not replays:
         return jsonify({"total_pp": 0, "play_count": 0, "top_play_pp": 0})
 
@@ -199,7 +205,7 @@ def scan_replays_task():
         songs_path = os.path.join(osu_folder, 'Songs')
         if not os.path.isdir(replays_path): raise FileNotFoundError(f"Replays directory not found at: {replays_path}")
 
-        all_beatmaps = {b['md5_hash']: b for b in database.get_all_beatmaps()}
+        all_beatmaps = {b['md5_hash']: b for b in database.get_all_beatmaps(limit=100000)['beatmaps']}
         if not all_beatmaps: logging.warning("Beatmap DB is empty. Replay data may be incomplete.")
 
         replay_files = [f for f in os.listdir(replays_path) if f.endswith('.osr')]
