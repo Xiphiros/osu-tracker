@@ -65,35 +65,65 @@ def init_db():
     print("Database initialized and migrated successfully.")
 
 def add_replay(replay_data):
-    """Adds a new replay record to the database. Ignores duplicates based on replay_md5."""
+    """Adds a new replay or updates it if calculated data was missing."""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Using INSERT OR IGNORE to gracefully handle duplicate replays
+    params = {
+        'game_mode': replay_data.get('game_mode'),
+        'game_version': replay_data.get('game_version'),
+        'beatmap_md5': replay_data.get('beatmap_md5'),
+        'player_name': replay_data.get('player_name'),
+        'replay_md5': replay_data.get('replay_md5'),
+        'num_300s': replay_data.get('num_300s'),
+        'num_100s': replay_data.get('num_100s'),
+        'num_50s': replay_data.get('num_50s'),
+        'num_gekis': replay_data.get('num_gekis'),
+        'num_katus': replay_data.get('num_katus'),
+        'num_misses': replay_data.get('num_misses'),
+        'total_score': replay_data.get('total_score'),
+        'max_combo': replay_data.get('max_combo'),
+        'mods_used': replay_data.get('mods_used'),
+        'pp': replay_data.get('pp'),
+        'stars': replay_data.get('stars'),
+        'map_max_combo': replay_data.get('map_max_combo'),
+        'bpm': replay_data.get('bpm'),
+        'bpm_min': replay_data.get('bpm_min'),
+        'bpm_max': replay_data.get('bpm_max'),
+        'played_at': replay_data.get('played_at')
+    }
+
+    # This query performs an "upsert".
+    # If a replay with the same replay_md5 does not exist, it's inserted.
+    # If it does exist (ON CONFLICT), it's updated, but only if the existing
+    # replay is missing PP data and the new data has it. This efficiently
+    # backfills data for old replays during a scan without overwriting
+    # existing valid data.
     cursor.execute('''
-        INSERT OR IGNORE INTO replays (
+        INSERT INTO replays (
             game_mode, game_version, beatmap_md5, player_name, replay_md5,
             num_300s, num_100s, num_50s, num_gekis, num_katus, num_misses,
             total_score, max_combo, mods_used, pp, stars, map_max_combo, 
             bpm, bpm_min, bpm_max, played_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        replay_data.get('game_mode'), replay_data.get('game_version'),
-        replay_data.get('beatmap_md5'), replay_data.get('player_name'),
-        replay_data.get('replay_md5'), replay_data.get('num_300s'),
-        replay_data.get('num_100s'), replay_data.get('num_50s'),
-        replay_data.get('num_gekis'), replay_data.get('num_katus'),
-        replay_data.get('num_misses'), replay_data.get('total_score'),
-        replay_data.get('max_combo'), replay_data.get('mods_used'),
-        replay_data.get('pp'), replay_data.get('stars'),
-        replay_data.get('map_max_combo'), replay_data.get('bpm'),
-        replay_data.get('bpm_min'), replay_data.get('bpm_max'),
-        replay_data.get('played_at')
-    ))
+        ) VALUES (
+            :game_mode, :game_version, :beatmap_md5, :player_name, :replay_md5,
+            :num_300s, :num_100s, :num_50s, :num_gekis, :num_katus, :num_misses,
+            :total_score, :max_combo, :mods_used, :pp, :stars, :map_max_combo, 
+            :bpm, :bpm_min, :bpm_max, :played_at
+        )
+        ON CONFLICT(replay_md5) DO UPDATE SET
+            pp = excluded.pp,
+            stars = excluded.stars,
+            map_max_combo = excluded.map_max_combo,
+            bpm = excluded.bpm,
+            bpm_min = excluded.bpm_min,
+            bpm_max = excluded.bpm_max
+        WHERE replays.pp IS NULL AND excluded.pp IS NOT NULL
+    ''', params)
     
     conn.commit()
     conn.close()
-      
+     
 def get_all_replays(player_name=None):
     """Retrieves all replay records from the database, optionally filtering by player name."""
     conn = get_db_connection()
