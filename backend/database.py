@@ -23,44 +23,55 @@ def init_db():
         # --- Migration for replays table ---
         cursor.execute("PRAGMA table_info(replays)")
         replay_columns = [row['name'] for row in cursor.fetchall()]
-        if 'bpm_min' not in replay_columns:
-            logging.info("Applying migration: Adding 'bpm_min' to 'replays' table.")
-            cursor.execute("ALTER TABLE replays ADD COLUMN bpm_min REAL")
-        if 'bpm_max' not in replay_columns:
-            logging.info("Applying migration: Adding 'bpm_max' to 'replays' table.")
-            cursor.execute("ALTER TABLE replays ADD COLUMN bpm_max REAL")
-        if 'aim' not in replay_columns:
-            logging.info("Applying migration: Adding 'aim' to 'replays' table.")
-            cursor.execute("ALTER TABLE replays ADD COLUMN aim REAL")
-        if 'speed' not in replay_columns:
-            logging.info("Applying migration: Adding 'speed' to 'replays' table.")
-            cursor.execute("ALTER TABLE replays ADD COLUMN speed REAL")
-        if 'slider_factor' not in replay_columns:
-            logging.info("Applying migration: Adding 'slider_factor' to 'replays' table.")
-            cursor.execute("ALTER TABLE replays ADD COLUMN slider_factor REAL")
+        if 'speed_note_count' not in replay_columns:
+            logging.info("Applying migration: Adding 'speed_note_count' to 'replays' table.")
+            cursor.execute("ALTER TABLE replays ADD COLUMN speed_note_count REAL")
+        if 'aim_difficult_strain_count' not in replay_columns:
+            logging.info("Applying migration: Adding 'aim_difficult_strain_count' to 'replays' table.")
+            cursor.execute("ALTER TABLE replays ADD COLUMN aim_difficult_strain_count REAL")
+        if 'speed_difficult_strain_count' not in replay_columns:
+            logging.info("Applying migration: Adding 'speed_difficult_strain_count' to 'replays' table.")
+            cursor.execute("ALTER TABLE replays ADD COLUMN speed_difficult_strain_count REAL")
+        if 'aim_difficult_slider_count' not in replay_columns:
+            logging.info("Applying migration: Adding 'aim_difficult_slider_count' to 'replays' table.")
+            cursor.execute("ALTER TABLE replays ADD COLUMN aim_difficult_slider_count REAL")
+
 
         # --- Migration for beatmaps table ---
         cursor.execute("PRAGMA table_info(beatmaps)")
         beatmap_columns = [row['name'] for row in cursor.fetchall()]
-        if 'stars' not in beatmap_columns:
-            logging.info("Applying migration: Adding 'stars' to 'beatmaps' table.")
-            cursor.execute("ALTER TABLE beatmaps ADD COLUMN stars REAL")
-        if 'game_mode' not in beatmap_columns:
-            logging.info("Applying migration: Adding 'game_mode' to 'beatmaps' table.")
-            cursor.execute("ALTER TABLE beatmaps ADD COLUMN game_mode INTEGER")
+        if 'speed_note_count' not in beatmap_columns:
+            logging.info("Applying migration: Adding 'speed_note_count' to 'beatmaps' table.")
+            cursor.execute("ALTER TABLE beatmaps ADD COLUMN speed_note_count REAL")
+        if 'aim_difficult_strain_count' not in beatmap_columns:
+            logging.info("Applying migration: Adding 'aim_difficult_strain_count' to 'beatmaps' table.")
+            cursor.execute("ALTER TABLE beatmaps ADD COLUMN aim_difficult_strain_count REAL")
+        if 'speed_difficult_strain_count' not in beatmap_columns:
+            logging.info("Applying migration: Adding 'speed_difficult_strain_count' to 'beatmaps' table.")
+            cursor.execute("ALTER TABLE beatmaps ADD COLUMN speed_difficult_strain_count REAL")
+        if 'aim_difficult_slider_count' not in beatmap_columns:
+            logging.info("Applying migration: Adding 'aim_difficult_slider_count' to 'beatmaps' table.")
+            cursor.execute("ALTER TABLE beatmaps ADD COLUMN aim_difficult_slider_count REAL")
+
 
         # --- Migration for beatmap_mod_cache table ---
         cursor.execute("PRAGMA table_info(beatmap_mod_cache)")
         cache_columns = [row['name'] for row in cursor.fetchall()]
-        if 'aim' not in cache_columns:
-            logging.info("Applying migration: Adding 'aim' to 'beatmap_mod_cache' table.")
-            cursor.execute("ALTER TABLE beatmap_mod_cache ADD COLUMN aim REAL")
-        if 'speed' not in cache_columns:
-            logging.info("Applying migration: Adding 'speed' to 'beatmap_mod_cache' table.")
-            cursor.execute("ALTER TABLE beatmap_mod_cache ADD COLUMN speed REAL")
-        if 'slider_factor' not in cache_columns:
-            logging.info("Applying migration: Adding 'slider_factor' to 'beatmap_mod_cache' table.")
-            cursor.execute("ALTER TABLE beatmap_mod_cache ADD COLUMN slider_factor REAL")
+        if 'speed_note_count' not in cache_columns:
+            logging.info("Applying migration: Adding 'speed_note_count' to 'beatmap_mod_cache' table.")
+            cursor.execute("ALTER TABLE beatmap_mod_cache ADD COLUMN speed_note_count REAL")
+        if 'aim_difficult_strain_count' not in cache_columns:
+            logging.info("Applying migration: Adding 'aim_difficult_strain_count' to 'beatmap_mod_cache' table.")
+            cursor.execute("ALTER TABLE beatmap_mod_cache ADD COLUMN aim_difficult_strain_count REAL")
+        if 'speed_difficult_strain_count' not in cache_columns:
+            logging.info("Applying migration: Adding 'speed_difficult_strain_count' to 'beatmap_mod_cache' table.")
+            cursor.execute("ALTER TABLE beatmap_mod_cache ADD COLUMN speed_difficult_strain_count REAL")
+        if 'aim_difficult_slider_count' not in cache_columns:
+            logging.info("Applying migration: Adding 'aim_difficult_slider_count' to 'beatmap_mod_cache' table.")
+            cursor.execute("ALTER TABLE beatmap_mod_cache ADD COLUMN aim_difficult_slider_count REAL")
+
+        # --- Old Migration Removal (for columns that are now part of the new system) ---
+        # This section can be expanded if we deprecate old columns entirely. For now, we'll just add new ones.
         
         conn.commit()
 
@@ -89,6 +100,10 @@ def init_db():
             aim REAL,
             speed REAL,
             slider_factor REAL,
+            speed_note_count REAL,
+            aim_difficult_strain_count REAL,
+            speed_difficult_strain_count REAL,
+            aim_difficult_slider_count REAL,
             map_max_combo INTEGER,
             bpm REAL,
             played_at TEXT,
@@ -122,7 +137,11 @@ def init_db():
             audio_file TEXT,
             background_file TEXT,
             bpm_min REAL,
-            bpm_max REAL
+            bpm_max REAL,
+            speed_note_count REAL,
+            aim_difficult_strain_count REAL,
+            speed_difficult_strain_count REAL,
+            aim_difficult_slider_count REAL
         )
     ''')
     
@@ -139,6 +158,10 @@ def init_db():
             aim REAL,
             speed REAL,
             slider_factor REAL,
+            speed_note_count REAL,
+            aim_difficult_strain_count REAL,
+            speed_difficult_strain_count REAL,
+            aim_difficult_slider_count REAL,
             PRIMARY KEY (md5_hash, mods)
         )
     ''')
@@ -173,6 +196,10 @@ def add_replay(replay_data):
         'aim': replay_data.get('aim'),
         'speed': replay_data.get('speed'),
         'slider_factor': replay_data.get('slider_factor'),
+        'speed_note_count': replay_data.get('speed_note_count'),
+        'aim_difficult_strain_count': replay_data.get('aim_difficult_strain_count'),
+        'speed_difficult_strain_count': replay_data.get('speed_difficult_strain_count'),
+        'aim_difficult_slider_count': replay_data.get('aim_difficult_slider_count'),
         'map_max_combo': replay_data.get('map_max_combo'),
         'bpm': replay_data.get('bpm'),
         'bpm_min': replay_data.get('bpm_min'),
@@ -184,13 +211,15 @@ def add_replay(replay_data):
         INSERT INTO replays (
             game_mode, game_version, beatmap_md5, player_name, replay_md5,
             num_300s, num_100s, num_50s, num_gekis, num_katus, num_misses,
-            total_score, max_combo, mods_used, pp, stars, aim, speed, slider_factor, map_max_combo, 
-            bpm, bpm_min, bpm_max, played_at
+            total_score, max_combo, mods_used, pp, stars, aim, speed, slider_factor, 
+            speed_note_count, aim_difficult_strain_count, speed_difficult_strain_count, aim_difficult_slider_count,
+            map_max_combo, bpm, bpm_min, bpm_max, played_at
         ) VALUES (
             :game_mode, :game_version, :beatmap_md5, :player_name, :replay_md5,
             :num_300s, :num_100s, :num_50s, :num_gekis, :num_katus, :num_misses,
-            :total_score, :max_combo, :mods_used, :pp, :stars, :aim, :speed, :slider_factor, :map_max_combo, 
-            :bpm, :bpm_min, :bpm_max, :played_at
+            :total_score, :max_combo, :mods_used, :pp, :stars, :aim, :speed, :slider_factor,
+            :speed_note_count, :aim_difficult_strain_count, :speed_difficult_strain_count, :aim_difficult_slider_count,
+            :map_max_combo, :bpm, :bpm_min, :bpm_max, :played_at
         )
         ON CONFLICT(replay_md5) DO UPDATE SET
             pp = excluded.pp,
@@ -198,6 +227,10 @@ def add_replay(replay_data):
             aim = excluded.aim,
             speed = excluded.speed,
             slider_factor = excluded.slider_factor,
+            speed_note_count = excluded.speed_note_count,
+            aim_difficult_strain_count = excluded.aim_difficult_strain_count,
+            speed_difficult_strain_count = excluded.speed_difficult_strain_count,
+            aim_difficult_slider_count = excluded.aim_difficult_slider_count,
             map_max_combo = excluded.map_max_combo,
             bpm = excluded.bpm,
             bpm_min = excluded.bpm_min,
@@ -324,7 +357,9 @@ def add_or_update_beatmaps(beatmaps_data):
             data.get('num_hitcircles'), data.get('num_sliders'), data.get('num_spinners'),
             data.get('ar'), data.get('cs'), data.get('hp'), data.get('od'), data.get('stars'),
             data.get('bpm'), data.get('audio_file'), data.get('background_file'), 
-            data.get('bpm_min'), data.get('bpm_max')
+            data.get('bpm_min'), data.get('bpm_max'),
+            data.get('speed_note_count'), data.get('aim_difficult_strain_count'),
+            data.get('speed_difficult_strain_count'), data.get('aim_difficult_slider_count')
         ))
 
     cursor.executemany('''
@@ -332,8 +367,9 @@ def add_or_update_beatmaps(beatmaps_data):
             md5_hash, artist, title, creator, difficulty, folder_name, osu_file_name,
             grades, game_mode, last_played_date, num_hitcircles, num_sliders, num_spinners,
             ar, cs, hp, od, stars, bpm,
-            audio_file, background_file, bpm_min, bpm_max
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            audio_file, background_file, bpm_min, bpm_max,
+            speed_note_count, aim_difficult_strain_count, speed_difficult_strain_count, aim_difficult_slider_count
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(md5_hash) DO UPDATE SET
             artist=excluded.artist,
             title=excluded.title,
@@ -353,7 +389,11 @@ def add_or_update_beatmaps(beatmaps_data):
             audio_file=COALESCE(beatmaps.audio_file, excluded.audio_file),
             background_file=COALESCE(beatmaps.background_file, excluded.background_file),
             bpm_min=COALESCE(beatmaps.bpm_min, excluded.bpm_min),
-            bpm_max=COALESCE(beatmaps.bpm_max, excluded.bpm_max)
+            bpm_max=COALESCE(beatmaps.bpm_max, excluded.bpm_max),
+            speed_note_count=COALESCE(beatmaps.speed_note_count, excluded.speed_note_count),
+            aim_difficult_strain_count=COALESCE(beatmaps.aim_difficult_strain_count, excluded.aim_difficult_strain_count),
+            speed_difficult_strain_count=COALESCE(beatmaps.speed_difficult_strain_count, excluded.speed_difficult_strain_count),
+            aim_difficult_slider_count=COALESCE(beatmaps.aim_difficult_slider_count, excluded.aim_difficult_slider_count)
     ''', beatmap_tuples)
     
     conn.commit()
@@ -368,12 +408,15 @@ def add_beatmap_mod_cache(cache_data):
     
     params = [(
         d['md5_hash'], d['mods'], d['stars'], d['ar'], d['od'], 
-        d['cs'], d['hp'], d['bpm'], d.get('aim'), d.get('speed'), d.get('slider_factor')
+        d['cs'], d['hp'], d['bpm'], d.get('aim'), d.get('speed'), d.get('slider_factor'),
+        d.get('speed_note_count'), d.get('aim_difficult_strain_count'),
+        d.get('speed_difficult_strain_count'), d.get('aim_difficult_slider_count')
     ) for d in cache_data]
 
     cursor.executemany('''
-        INSERT INTO beatmap_mod_cache (md5_hash, mods, stars, ar, od, cs, hp, bpm, aim, speed, slider_factor)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO beatmap_mod_cache (md5_hash, mods, stars, ar, od, cs, hp, bpm, aim, speed, slider_factor,
+        speed_note_count, aim_difficult_strain_count, speed_difficult_strain_count, aim_difficult_slider_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(md5_hash, mods) DO UPDATE SET
             stars=excluded.stars,
             ar=excluded.ar,
@@ -383,7 +426,11 @@ def add_beatmap_mod_cache(cache_data):
             bpm=excluded.bpm,
             aim=excluded.aim,
             speed=excluded.speed,
-            slider_factor=excluded.slider_factor
+            slider_factor=excluded.slider_factor,
+            speed_note_count=excluded.speed_note_count,
+            aim_difficult_strain_count=excluded.aim_difficult_strain_count,
+            speed_difficult_strain_count=excluded.speed_difficult_strain_count,
+            aim_difficult_slider_count=excluded.aim_difficult_slider_count
     ''', params)
     
     conn.commit()
@@ -432,42 +479,60 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[], focus=None):
     
     sr_lower_bound = target_sr
     sr_upper_bound = target_sr + 0.15
-
+    
+    focus_clause = ""
+    # Use the cached modded values if a core mod is selected.
     if base_mod != 0:
-        params = [base_mod, sr_lower_bound, sr_upper_bound, max_bpm]
-        focus_clause = ""
-        if focus == 'aim':
-            focus_clause = " AND c.aim > c.speed "
-        elif focus == 'speed':
-            focus_clause = " AND c.speed > c.aim "
-        elif focus == 'technical':
-            focus_clause = " AND c.slider_factor > 1.3 "
+        table_alias = "c"
+        if focus == 'aim': # Jump Aim
+            focus_clause = " AND c.aim > c.speed * 1.1 AND c.slider_factor > 0.95 "
+        elif focus == 'speed': # Burst Speed
+            total_objects_expr = "(b.num_hitcircles + b.num_sliders + b.num_spinners)"
+            focus_clause = f" AND c.speed > c.aim * 1.1 AND (c.speed_note_count / {total_objects_expr}) < 0.4 "
+        elif focus == 'technical': # Technical Aim
+            focus_clause = " AND (c.aim_difficult_slider_count / b.num_sliders) > 0.5 AND b.num_sliders > (b.num_hitcircles + b.num_sliders + b.num_spinners) * 0.2 "
+        elif focus == 'stamina': # Stream/Stamina Speed
+            total_objects_expr = "(b.num_hitcircles + b.num_sliders + b.num_spinners)"
+            focus_clause = f" AND (c.speed_note_count / {total_objects_expr}) > 0.4 "
 
         exclude_placeholders = '?' * len(excluded_ids)
         query = f"""
-            SELECT b.*
+            SELECT b.*, c.stars as modded_stars
             FROM beatmap_mod_cache c
             JOIN beatmaps b ON c.md5_hash = b.md5_hash
             WHERE c.mods = ?
               AND c.stars >= ? AND c.stars < ?
               AND c.bpm <= ?
-              AND b.game_mode = 0
+              AND b.game_mode = 0 AND b.num_sliders > 0 AND (b.num_hitcircles + b.num_sliders + b.num_spinners) > 0
               {focus_clause}
               {f"AND b.md5_hash NOT IN ({','.join(exclude_placeholders)})" if excluded_ids else ""}
             ORDER BY RANDOM()
             LIMIT 1
         """
-        params.extend(excluded_ids)
+        params = [base_mod, sr_lower_bound, sr_upper_bound, max_bpm] + excluded_ids
         logging.debug(f"Recommendation query (cached): {query} with params {params}")
         cursor.execute(query, params)
         row = cursor.fetchone()
-    else:
+    else: # NoMod calculation
+        table_alias = "b"
+        if focus == 'aim': # Jump Aim
+            focus_clause = " AND b.aim > b.speed * 1.1 AND b.slider_factor > 0.95 "
+        elif focus == 'speed': # Burst Speed
+            total_objects_expr = "(b.num_hitcircles + b.num_sliders + b.num_spinners)"
+            focus_clause = f" AND b.speed > b.aim * 1.1 AND (b.speed_note_count / {total_objects_expr}) < 0.4 "
+        elif focus == 'technical': # Technical Aim
+            focus_clause = " AND (b.aim_difficult_slider_count / b.num_sliders) > 0.5 AND b.num_sliders > (b.num_hitcircles + b.num_sliders + b.num_spinners) * 0.2 "
+        elif focus == 'stamina': # Stream/Stamina Speed
+            total_objects_expr = "(b.num_hitcircles + b.num_sliders + b.num_spinners)"
+            focus_clause = f" AND (b.speed_note_count / {total_objects_expr}) > 0.4 "
+
         exclude_placeholders = '?' * len(excluded_ids)
         query = f"""
-            SELECT * FROM beatmaps
-            WHERE game_mode = 0
+            SELECT *, stars as modded_stars FROM beatmaps b
+            WHERE game_mode = 0 AND num_sliders > 0 AND (num_hitcircles + num_sliders + num_spinners) > 0
               AND stars >= ? AND stars < ?
               AND bpm <= ?
+              {focus_clause}
               {f"AND md5_hash NOT IN ({','.join(exclude_placeholders)})" if excluded_ids else ""}
             ORDER BY RANDOM()
             LIMIT 1
@@ -484,7 +549,11 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[], focus=None):
         return None
 
     beatmap = dict(row)
+    # The original star rating is from the DB (either nomod or pre-cached).
+    # We will overwrite it with a precise, final calculation.
+    beatmap['stars'] = beatmap.pop('modded_stars', beatmap.get('stars'))
     osu_folder = os.getenv('OSU_FOLDER')
+
     if not osu_folder:
         logging.error("OSU_FOLDER not set, cannot find .osu file for final calculation.")
         return beatmap
