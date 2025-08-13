@@ -117,7 +117,7 @@ def serve_song_file(file_path):
     return send_from_directory(songs_dir, file_path)
 
 @app.route('/api/scan', methods=['POST'])
-def scan_replays_folder():
+def scan_replays_folder_endpoint():
     osu_folder = os.getenv('OSU_FOLDER')
     if not osu_folder:
         return jsonify({"error": "OSU_FOLDER path not set in .env file"}), 500
@@ -126,13 +126,14 @@ def scan_replays_folder():
     if not os.path.isdir(replays_path):
         return jsonify({"error": f"Replays directory not found at: {replays_path}"}), 404
     try:
-        logging.info("Syncing local beatmap database before scan...")
-        sync_local_beatmaps()
-        logging.info("Beatmap database sync complete.")
-
+        # We no longer sync beatmaps automatically before a replay scan.
+        # This is now a separate user-initiated action.
         all_beatmaps = {b['md5_hash']: b for b in database.get_all_beatmaps()}
+        if not all_beatmaps:
+            logging.warning("Beatmap database is empty. Replay data may be incomplete. Please run a beatmap sync.")
 
         replay_files = [f for f in os.listdir(replays_path) if f.endswith('.osr')]
+        processed_count = 0
         for file_name in replay_files:
             file_path = os.path.join(replays_path, file_name)
             try:
@@ -151,16 +152,26 @@ def scan_replays_folder():
                         osu_details = parser.parse_osu_file(osu_file_path)
                         replay_data.update(osu_details)
 
-                        # Persist the newly parsed details to the beatmaps table
                         database.update_beatmap_details(replay_data['beatmap_md5'], osu_details)
                         
                 database.add_replay(replay_data)
+                processed_count += 1
             except Exception as e:
                 logging.error(f"Could not process file {file_name}: {e}", exc_info=True)
-        return jsonify({"status": "Scan complete", "replays_found": len(replay_files)})
+        return jsonify({"status": "Scan complete", "replays_found": len(replay_files), "replays_processed": processed_count})
     except Exception as e:
         logging.error(f"An error occurred during scan: {str(e)}", exc_info=True)
         return jsonify({"error": f"An error occurred during scan: {str(e)}"}), 500
+
+@app.route('/api/sync-beatmaps', methods=['POST'])
+def sync_beatmaps_endpoint():
+    """API endpoint to trigger a full beatmap database synchronization."""
+    try:
+        sync_local_beatmaps()
+        return jsonify({"status": "Beatmap database synchronization complete."})
+    except Exception as e:
+        logging.error(f"An error occurred during beatmap sync: {str(e)}", exc_info=True)
+        return jsonify({"error": f"An error occurred during sync: {str(e)}"}), 500
               
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -174,12 +185,12 @@ def sync_local_beatmaps():
     osu_folder = os.getenv('OSU_FOLDER')
     if not osu_folder:
         logging.warning("OSU_FOLDER not set. Cannot sync beatmap database.")
-        return
+        raise ValueError("OSU_FOLDER environment variable is not set.")
     
     db_path = os.path.join(osu_folder, 'osu!.db')
     if not os.path.exists(db_path):
         logging.warning(f"osu!.db not found at {db_path}. Cannot sync beatmap database.")
-        return
+        raise FileNotFoundError(f"osu!.db not found at {db_path}")
 
     songs_path = os.path.join(osu_folder, 'Songs')
     
@@ -214,7 +225,6 @@ def run_server():
 
 if __name__ == '__main__':
     database.init_db()
-    sync_local_beatmaps() # Sync on startup
 
     server_thread = threading.Thread(target=run_server)
     server_thread.daemon = True
