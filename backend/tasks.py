@@ -48,6 +48,7 @@ def process_osu_file_and_cache(osu_file_path, base_bpm, md5):
                 'bpm': round(base_bpm * map_attrs.clock_rate, 2),
                 'aim': round(diff_attrs.aim, 2),
                 'speed': round(diff_attrs.speed, 2),
+                'slider_factor': round(diff_attrs.slider_factor, 2),
             })
 
         return md5, details, mod_cache_results
