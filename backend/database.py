@@ -52,6 +52,15 @@ def init_db():
         if 'aim_difficult_slider_count' not in beatmap_columns:
             logging.info("Applying migration: Adding 'aim_difficult_slider_count' to 'beatmaps' table.")
             cursor.execute("ALTER TABLE beatmaps ADD COLUMN aim_difficult_slider_count REAL")
+        if 'aim' not in beatmap_columns:
+            logging.info("Applying migration: Adding 'aim' to 'beatmaps' table.")
+            cursor.execute("ALTER TABLE beatmaps ADD COLUMN aim REAL")
+        if 'speed' not in beatmap_columns:
+            logging.info("Applying migration: Adding 'speed' to 'beatmaps' table.")
+            cursor.execute("ALTER TABLE beatmaps ADD COLUMN speed REAL")
+        if 'slider_factor' not in beatmap_columns:
+            logging.info("Applying migration: Adding 'slider_factor' to 'beatmaps' table.")
+            cursor.execute("ALTER TABLE beatmaps ADD COLUMN slider_factor REAL")
 
 
         # --- Migration for beatmap_mod_cache table ---
@@ -70,9 +79,6 @@ def init_db():
             logging.info("Applying migration: Adding 'aim_difficult_slider_count' to 'beatmap_mod_cache' table.")
             cursor.execute("ALTER TABLE beatmap_mod_cache ADD COLUMN aim_difficult_slider_count REAL")
 
-        # --- Old Migration Removal (for columns that are now part of the new system) ---
-        # This section can be expanded if we deprecate old columns entirely. For now, we'll just add new ones.
-        
         conn.commit()
 
     conn = get_db_connection()
@@ -133,6 +139,9 @@ def init_db():
             hp REAL,
             od REAL,
             stars REAL,
+            aim REAL,
+            speed REAL,
+            slider_factor REAL,
             bpm REAL,
             audio_file TEXT,
             background_file TEXT,
@@ -356,6 +365,7 @@ def add_or_update_beatmaps(beatmaps_data):
             json.dumps(data.get('grades', {})), data.get('game_mode'), data.get('last_played_date'),
             data.get('num_hitcircles'), data.get('num_sliders'), data.get('num_spinners'),
             data.get('ar'), data.get('cs'), data.get('hp'), data.get('od'), data.get('stars'),
+            data.get('aim'), data.get('speed'), data.get('slider_factor'),
             data.get('bpm'), data.get('audio_file'), data.get('background_file'), 
             data.get('bpm_min'), data.get('bpm_max'),
             data.get('speed_note_count'), data.get('aim_difficult_strain_count'),
@@ -366,10 +376,10 @@ def add_or_update_beatmaps(beatmaps_data):
         INSERT INTO beatmaps (
             md5_hash, artist, title, creator, difficulty, folder_name, osu_file_name,
             grades, game_mode, last_played_date, num_hitcircles, num_sliders, num_spinners,
-            ar, cs, hp, od, stars, bpm,
+            ar, cs, hp, od, stars, aim, speed, slider_factor, bpm,
             audio_file, background_file, bpm_min, bpm_max,
             speed_note_count, aim_difficult_strain_count, speed_difficult_strain_count, aim_difficult_slider_count
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(md5_hash) DO UPDATE SET
             artist=excluded.artist,
             title=excluded.title,
@@ -385,6 +395,9 @@ def add_or_update_beatmaps(beatmaps_data):
             num_spinners=excluded.num_spinners,
             ar=excluded.ar, cs=excluded.cs, hp=excluded.hp, od=excluded.od, 
             stars=COALESCE(beatmaps.stars, excluded.stars),
+            aim=COALESCE(beatmaps.aim, excluded.aim),
+            speed=COALESCE(beatmaps.speed, excluded.speed),
+            slider_factor=COALESCE(beatmaps.slider_factor, excluded.slider_factor),
             bpm=excluded.bpm,
             audio_file=COALESCE(beatmaps.audio_file, excluded.audio_file),
             background_file=COALESCE(beatmaps.background_file, excluded.background_file),
