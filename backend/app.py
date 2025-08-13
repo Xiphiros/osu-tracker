@@ -42,6 +42,34 @@ TASK_PROGRESS = {
     "scan": {"status": "idle", "current": 0, "total": 0, "message": ""}
 }
 
+
+def _add_rank_to_replay(replay):
+    """
+    Calculates and adds the rank to a replay dictionary in-place.
+    The rank is determined by the grade saved in the beatmap's metadata.
+    """
+    def get_rank_from_grade(grade_val):
+        # Maps grade values from osu!.db to letter ranks
+        ranks = {0: "SS", 1: "S", 2: "SS", 3: "S", 4: "A", 5: "B", 6: "C", 7: "D"}
+        return ranks.get(grade_val, "N/A")
+
+    beatmap_info = replay.get('beatmap', {})
+    try:
+        grades_str = beatmap_info.get('grades')
+        grades = json.loads(grades_str) if grades_str else {}
+    except (json.JSONDecodeError, TypeError):
+        grades = {}
+
+    game_mode = replay.get('game_mode')
+    grade_val = -1
+    if game_mode == 0: grade_val = grades.get('osu')
+    elif game_mode == 1: grade_val = grades.get('taiko')
+    elif game_mode == 2: grade_val = grades.get('ctb')
+    elif game_mode == 3: grade_val = grades.get('mania')
+    
+    replay['rank'] = get_rank_from_grade(grade_val)
+
+
 @app.route('/api/beatmaps', methods=['GET'])
 def get_beatmaps():
     """API endpoint to get a paginated list of stored beatmap data."""
@@ -57,27 +85,10 @@ def get_replays():
     page = request.args.get('page', 1, type=int)
     limit = request.args.get('limit', 50, type=int)
     
-    def get_rank(grade_val):
-        ranks = {0:"SS", 1:"S", 2:"SS", 3:"S", 4:"A", 5:"B", 6:"C", 7:"D"}
-        return ranks.get(grade_val, "N/A")
-
     replays_data = database.get_all_replays(player_name=player_name, page=page, limit=limit)
     
     for replay in replays_data['replays']:
-        beatmap_info = replay.get('beatmap', {})
-        try:
-            grades_str = beatmap_info.get('grades')
-            grades = json.loads(grades_str) if grades_str else {}
-        except (json.JSONDecodeError, TypeError):
-            grades = {}
-
-        game_mode = replay.get('game_mode')
-        grade_val = -1
-        if game_mode == 0: grade_val = grades.get('osu')
-        elif game_mode == 1: grade_val = grades.get('taiko')
-        elif game_mode == 2: grade_val = grades.get('ctb')
-        elif game_mode == 3: grade_val = grades.get('mania')
-        replay['rank'] = get_rank(grade_val)
+        _add_rank_to_replay(replay)
 
     return jsonify(replays_data)
 
@@ -88,11 +99,12 @@ def get_latest_replay():
     if not player_name:
         return jsonify({"error": "Missing 'player_name' parameter."}), 400
     
-    # We can reuse get_all_replays since it sorts by date descending and supports limits.
     replays_data = database.get_all_replays(player_name=player_name, page=1, limit=1)
     
     if replays_data and replays_data['replays']:
-        return jsonify(replays_data['replays'][0])
+        latest_replay = replays_data['replays'][0]
+        _add_rank_to_replay(latest_replay)
+        return jsonify(latest_replay)
     else:
         return jsonify({"message": "No replays found for this player."}), 404
 
