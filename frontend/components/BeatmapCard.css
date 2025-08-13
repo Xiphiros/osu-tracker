@@ -41,7 +41,35 @@
 .beatmap-card .card-info {
     flex-grow: 1;
     min-width: 0; /* Fix for text-overflow in flexbox */
+    display: flex;
+    align-items: center;
+    gap: 15px;
 }
+
+.beatmap-card .play-button {
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 1em;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: background-color 0.2s;
+}
+
+.beatmap-card .play-button:hover:not(:disabled) {
+    background: rgba(255,255,255,0.2);
+}
+
+.beatmap-card .play-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 
 .beatmap-card .card-title {
     font-size: 1.25em;
