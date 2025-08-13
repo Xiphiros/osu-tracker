@@ -292,20 +292,16 @@ input:checked + .slider:before {
 
 .chart-controls {
     margin-bottom: 10px;
-    display: flex;
-    gap: 10px;
 }
-.chart-controls button {
-    background-color: #333;
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    padding: 5px 15px;
+
+#chart-type-select {
+    width: 100%;
+    padding: 8px;
     border-radius: 4px;
-    cursor: pointer;
-}
-.chart-controls button.active {
-    background-color: var(--accent-color);
-    font-weight: bold;
+    border: 1px solid var(--border-color);
+    background-color: #333;
+    color: var(--text-color);
+    font-size: 0.9em;
 }
 
 .chart-wrapper {
