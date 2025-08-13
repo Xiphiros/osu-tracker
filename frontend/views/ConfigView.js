@@ -1,4 +1,4 @@
-import { syncBeatmaps, scanReplays, getProgressStatus } from '../services/api.js';
+import { syncBeatmaps, scanReplays, getProgressStatus, getConfig, saveConfig, getPlayers } from '../services/api.js';
 
 let progressInterval = null;
 let lastSyncStatus = 'idle';
@@ -11,6 +11,30 @@ function stopProgressPolling() {
     }
 }
 
+async function loadConfigData(view) {
+    const folderInput = view.querySelector('#osu-folder-input');
+    const playerSelect = view.querySelector('#default-player-select');
+    
+    try {
+        const [config, players] = await Promise.all([getConfig(), getPlayers()]);
+        
+        folderInput.value = config.osu_folder || '';
+        
+        playerSelect.innerHTML = '<option value="">None</option>';
+        players.forEach(player => {
+            const isSelected = player === config.default_player;
+            playerSelect.innerHTML += `<option value="${player}" ${isSelected ? 'selected' : ''}>${player}</option>`;
+        });
+        
+    } catch (error) {
+        console.error("Failed to load config data:", error);
+        const statusMessage = view.querySelector('#config-status-message');
+        statusMessage.textContent = `Error loading settings: ${error.message}`;
+        statusMessage.className = 'error';
+        statusMessage.style.display = 'block';
+    }
+}
+
 export function createConfigView() {
     const view = document.createElement('div');
     view.id = 'config-view';
@@ -19,6 +43,21 @@ export function createConfigView() {
     view.innerHTML = `
         <h2>Configuration & Maintenance</h2>
         <div id="config-status-message"></div>
+
+        <div class="config-action-card">
+            <h3>Application Settings</h3>
+            <div class="form-group">
+                <label for="osu-folder-input">osu! Folder Path</label>
+                <input type="text" id="osu-folder-input" placeholder="e.g., C:/Users/YourUser/AppData/Local/osu!">
+                <small>The absolute path to your osu! installation directory. A restart is required for this to take full effect.</small>
+            </div>
+            <div class="form-group">
+                <label for="default-player-select">Default Player</label>
+                <select id="default-player-select"></select>
+                <small>The player profile to load when the application starts.</small>
+            </div>
+            <button id="save-config-button">Save Settings</button>
+        </div>
         
         <div class="config-action-card">
             <h3>Sync Beatmap Database</h3>
@@ -41,9 +80,38 @@ export function createConfigView() {
         </div>
     `;
 
+    // Attach event listeners after innerHTML is set
+    view.addEventListener('viewactivated', () => loadConfigData(view));
+    
+    const saveButton = view.querySelector('#save-config-button');
+    const statusMessage = view.querySelector('#config-status-message');
+
+    saveButton.addEventListener('click', async () => {
+        const osuFolder = view.querySelector('#osu-folder-input').value;
+        const defaultPlayer = view.querySelector('#default-player-select').value;
+        
+        saveButton.disabled = true;
+        saveButton.textContent = 'Saving...';
+        statusMessage.style.display = 'none';
+
+        try {
+            await saveConfig({
+                "osu_folder": osuFolder,
+                "default_player": defaultPlayer
+            });
+            setStatus('Settings saved successfully!', 'success');
+            // Notify other parts of the app that data (like default player) might have changed
+            view.dispatchEvent(new CustomEvent('datachanged', { bubbles: true }));
+        } catch (error) {
+            setStatus(`Error saving settings: ${error.message}`, 'error');
+        } finally {
+            saveButton.disabled = false;
+            saveButton.textContent = 'Save Settings';
+        }
+    });
+
     const syncButton = view.querySelector('#sync-beatmaps-button');
     const scanButton = view.querySelector('#scan-replays-button-config');
-    const statusMessage = view.querySelector('#config-status-message');
 
     const syncProgressContainer = view.querySelector('#sync-progress-container');
     const syncProgressBar = view.querySelector('#sync-progress');
@@ -56,6 +124,7 @@ export function createConfigView() {
     const setButtonsDisabled = (disabled) => {
         syncButton.disabled = disabled;
         scanButton.disabled = disabled;
+        saveButton.disabled = disabled;
     };
 
     const setStatus = (message, type = 'info') => {
@@ -66,7 +135,7 @@ export function createConfigView() {
 
     const startPolling = () => {
         stopProgressPolling();
-        lastSyncStatus = 'running'; // Assume it starts running immediately
+        lastSyncStatus = 'running';
         lastScanStatus = 'running';
         
         progressInterval = setInterval(async () => {
@@ -75,7 +144,6 @@ export function createConfigView() {
                 const syncData = progress.sync;
                 const scanData = progress.scan;
 
-                // --- Update Sync Progress Bar ---
                 if (syncData.status === 'running') {
                     syncProgressContainer.style.display = 'block';
                     syncProgressBar.value = syncData.current;
@@ -83,7 +151,6 @@ export function createConfigView() {
                     syncProgressText.textContent = `${syncData.message} (${syncData.current} / ${syncData.total || '?'})`;
                 }
 
-                // --- Handle Sync Completion ---
                 if (syncData.status !== 'running' && lastSyncStatus === 'running') {
                     syncProgressContainer.style.display = 'none';
                     setStatus(syncData.message, syncData.status === 'complete' ? 'success' : 'error');
@@ -92,7 +159,6 @@ export function createConfigView() {
                     }
                 }
                 
-                // --- Update Scan Progress Bar ---
                 if (scanData.status === 'running') {
                     scanProgressContainer.style.display = 'block';
                     scanProgressBar.value = scanData.current;
@@ -100,7 +166,6 @@ export function createConfigView() {
                     scanProgressText.textContent = `${scanData.message} (${scanData.current} / ${scanData.total || '?'})`;
                 }
 
-                // --- Handle Scan Completion ---
                 if (scanData.status !== 'running' && lastScanStatus === 'running') {
                     scanProgressContainer.style.display = 'none';
                     setStatus(scanData.message, scanData.status === 'complete' ? 'success' : 'error');
@@ -112,7 +177,6 @@ export function createConfigView() {
                 lastSyncStatus = syncData.status;
                 lastScanStatus = scanData.status;
 
-                // --- Stop Polling if both tasks are idle ---
                 if (syncData.status !== 'running' && scanData.status !== 'running') {
                     stopProgressPolling();
                     setButtonsDisabled(false);
@@ -132,7 +196,7 @@ export function createConfigView() {
         syncProgressContainer.style.display = 'block';
         syncProgressBar.value = 0;
         syncProgressText.textContent = 'Starting sync...';
-        lastSyncStatus = 'idle'; // Reset before starting
+        lastSyncStatus = 'idle';
 
         try {
             await syncBeatmaps();
@@ -149,7 +213,7 @@ export function createConfigView() {
         scanProgressContainer.style.display = 'block';
         scanProgressBar.value = 0;
         scanProgressText.textContent = 'Starting scan...';
-        lastScanStatus = 'idle'; // Reset before starting
+        lastScanStatus = 'idle';
 
         try {
             await scanReplays();
