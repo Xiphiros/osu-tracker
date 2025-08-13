@@ -319,11 +319,13 @@ def calculate_pp(osu_file_path, replay_data):
         pp_data = {
             "pp": perf_attrs.pp,
             "stars": perf_attrs.difficulty.stars,
-            "map_max_combo": perf_attrs.difficulty.max_combo
+            "map_max_combo": perf_attrs.difficulty.max_combo,
+            "aim": perf_attrs.difficulty.aim,
+            "speed": perf_attrs.difficulty.speed,
         }
         logging.debug(f"Calculated PP data for {os.path.basename(osu_file_path)}: {pp_data}")
         return pp_data
     except Exception as e:
         # Return default values if calculation fails for any reason
         logging.error(f"Could not calculate PP for {osu_file_path}: {e}", exc_info=True)
-        return {"pp": None, "stars": None, "map_max_combo": None}
+        return {"pp": None, "stars": None, "map_max_combo": None, "aim": None, "speed": None}
