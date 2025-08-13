@@ -3,489 +3,51 @@ import sys
 import logging
 import threading
 import webview
-import json
 import signal
-import concurrent.futures
-from flask import Flask, jsonify, send_from_directory, request
+from flask import Flask, send_from_directory
 from flask_cors import CORS
-from dotenv import load_dotenv, set_key
 
+# Import configurations and modular components
+from config import IS_BUNDLED, static_folder_path
+from api.routes import api_blueprint
 import database
-import parser
-import rosu_pp_py
 
-# Determine if running in a PyInstaller bundle
-IS_BUNDLED = getattr(sys, 'frozen', False)
-
-# Configure logging, use INFO for bundled app, DEBUG for dev
-logging.basicConfig(
-    level=logging.INFO if IS_BUNDLED else logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-
-# Load environment variables from .env file.
-# Find the .env file, whether bundled or in dev.
-if IS_BUNDLED:
-    env_path = os.path.join(os.path.dirname(sys.executable), '.env')
-else:
-    env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
-
-if os.path.exists(env_path):
-    load_dotenv(dotenv_path=env_path)
-else:
-    # Create a dummy .env if it doesn't exist
-    with open(env_path, 'w') as f:
-        f.write("# .env file created by osu! Tracker\n")
-    load_dotenv(dotenv_path=env_path)
-
-
-# Set up static folder path.
-if IS_BUNDLED:
-    static_folder_path = os.path.join(sys._MEIPASS, 'frontend')
-else:
-    static_folder_path = os.path.join(os.path.dirname(__file__), '..', 'frontend')
-
+# --- Flask App Initialization ---
 app = Flask(__name__, static_folder=static_folder_path, static_url_path='')
 CORS(app)
+app.register_blueprint(api_blueprint)
 
-# Global dictionary to track progress of background tasks.
-# status can be 'idle', 'running', 'complete', 'error'
-TASK_PROGRESS = {
-    "sync": {"status": "idle", "current": 0, "total": 0, "message": ""},
-    "scan": {"status": "idle", "current": 0, "total": 0, "message": ""}
-}
-
-
-def _add_rank_to_replay(replay):
-    """
-    Calculates and adds the rank to a replay dictionary in-place.
-    For osu!standard, it calculates from score stats. For other modes, it uses the grade from osu!.db.
-    """
-    beatmap_info = replay.get('beatmap', {})
-    game_mode = replay.get('game_mode')
-
-    # --- Live Rank Calculation for osu!standard (mode 0) ---
-    if game_mode == 0:
-        n300 = replay.get('num_300s', 0)
-        n100 = replay.get('num_100s', 0)
-        n50 = replay.get('num_50s', 0)
-        n_miss = replay.get('num_misses', 0)
-
-        num_circles = beatmap_info.get('num_hitcircles')
-        num_sliders = beatmap_info.get('num_sliders')
-        num_spinners = beatmap_info.get('num_spinners')
-        
-        # Check if we have the necessary info from the beatmap
-        if num_circles is not None and num_sliders is not None and num_spinners is not None:
-            total_objects = num_circles + num_sliders + num_spinners
-
-            if total_objects > 0:
-                # This check ensures the replay matches the map version we have
-                if (n300 + n100 + n50 + n_miss) == total_objects:
-                    ratio_300 = n300 / total_objects
-                    ratio_50 = n50 / total_objects
-                    accuracy = (n300 * 300 + n100 * 100 + n50 * 50) / (total_objects * 300)
-
-                    if accuracy == 1.0:
-                        replay['rank'] = "SS"
-                        return
-                    if ratio_300 > 0.9 and ratio_50 < 0.01 and n_miss == 0:
-                        replay['rank'] = "S"
-                        return
-                    if (ratio_300 > 0.8 and n_miss == 0) or (ratio_300 > 0.9):
-                        replay['rank'] = "A"
-                        return
-                    if (ratio_300 > 0.7 and n_miss == 0) or (ratio_300 > 0.8):
-                        replay['rank'] = "B"
-                        return
-                    if ratio_300 > 0.6:
-                        replay['rank'] = "C"
-                        return
-                    replay['rank'] = "D"
-                    return
-
-    # --- Fallback to osu!.db grade for other modes or if live calc fails ---
-    def get_rank_from_grade(grade_val):
-        ranks = {0: "SS", 1: "S", 2: "SS", 3: "S", 4: "A", 5: "B", 6: "C", 7: "D"}
-        return ranks.get(grade_val, "N/A")
-
-    try:
-        grades_str = beatmap_info.get('grades')
-        grades = json.loads(grades_str) if grades_str else {}
-    except (json.JSONDecodeError, TypeError):
-        grades = {}
-
-    grade_val = -1
-    if game_mode == 0: grade_val = grades.get('osu')
-    elif game_mode == 1: grade_val = grades.get('taiko')
-    elif game_mode == 2: grade_val = grades.get('ctb')
-    elif game_mode == 3: grade_val = grades.get('mania')
-    
-    replay['rank'] = get_rank_from_grade(grade_val)
-
-
-@app.route('/api/beatmaps', methods=['GET'])
-def get_beatmaps():
-    """API endpoint to get a paginated list of stored beatmap data."""
-    page = request.args.get('page', 1, type=int)
-    limit = request.args.get('limit', 50, type=int)
-    beatmaps_data = database.get_all_beatmaps(page=page, limit=limit)
-    return jsonify(beatmaps_data)
-
-@app.route('/api/replays', methods=['GET'])
-def get_replays():
-    """API endpoint to get a paginated list of stored replay data."""
-    player_name = request.args.get('player_name')
-    page = request.args.get('page', 1, type=int)
-    limit = request.args.get('limit', 50, type=int)
-    
-    replays_data = database.get_all_replays(player_name=player_name, page=page, limit=limit)
-    
-    for replay in replays_data['replays']:
-        _add_rank_to_replay(replay)
-
-    return jsonify(replays_data)
-
-@app.route('/api/replays/latest', methods=['GET'])
-def get_latest_replay():
-    """API endpoint to get the single most recent replay for a player."""
-    player_name = request.args.get('player_name')
-    if not player_name:
-        return jsonify({"error": "Missing 'player_name' parameter."}), 400
-    
-    replays_data = database.get_all_replays(player_name=player_name, page=1, limit=1)
-    
-    if replays_data and replays_data['replays']:
-        latest_replay = replays_data['replays'][0]
-        _add_rank_to_replay(latest_replay)
-        return jsonify(latest_replay)
-    else:
-        return jsonify({"message": "No replays found for this player."}), 404
-
-@app.route('/api/players', methods=['GET'])
-def get_players():
-    players = database.get_unique_players()
-    return jsonify(players)
-
-@app.route('/api/players/<player_name>/stats', methods=['GET'])
-def get_player_stats(player_name):
-    replays = database.get_all_replays(player_name=player_name, limit=100000)['replays']
-    if not replays:
-        return jsonify({"total_pp": 0, "play_count": 0, "top_play_pp": 0})
-
-    pp_plays = [r for r in replays if r.get('pp') is not None and r.get('pp') > 0]
-    pp_plays.sort(key=lambda r: r['pp'], reverse=True)
-
-    total_pp = sum(replay['pp'] * (0.95 ** i) for i, replay in enumerate(pp_plays))
-    top_play_pp = pp_plays[0]['pp'] if pp_plays else 0
-
-    stats = {
-        "total_pp": round(total_pp, 2),
-        "play_count": len(replays),
-        "top_play_pp": round(top_play_pp, 2)
-    }
-    return jsonify(stats)
-
-def _calculate_accuracy(replay):
-    """Helper to calculate osu!standard accuracy from a replay dict."""
-    if replay.get('game_mode') == 0:
-        total_hits = replay.get('num_300s', 0) + replay.get('num_100s', 0) + replay.get('num_50s', 0) + replay.get('num_misses', 0)
-        if total_hits == 0:
-            return 0.0
-        return ((replay.get('num_300s', 0) * 300 + replay.get('num_100s', 0) * 100 + replay.get('num_50s', 0) * 50) / (total_hits * 300)) * 100
-    return 0.0
-
-@app.route('/api/players/<player_name>/suggest-sr', methods=['GET'])
-def suggest_sr(player_name):
-    mods = request.args.get('mods', 0, type=int)
-    
-    replays = database.get_all_replays(player_name=player_name, limit=100000)['replays']
-    
-    mod_plays = []
-    CORE_MOD_MASK = 2 | 8 | 16 | 64 | 256 | 1024 # EZ, HD, HR, DT, HT, FL
-
-    for r in replays:
-        if r.get('stars') is None or r.get('game_mode') != 0:
-            continue
-            
-        replay_core_mods = r.get('mods_used', 0) & CORE_MOD_MASK
-        request_core_mods = mods & CORE_MOD_MASK
-        if replay_core_mods != request_core_mods:
-            continue
-                
-        mod_plays.append(r)
-        
-    if not mod_plays:
-        return jsonify({"message": "No plays found with this mod combination."}), 404
-        
-    # Replays from DB are already sorted by most recent first
-    recent_plays = mod_plays[:100]
-    
-    total_sr = sum(p['stars'] for p in recent_plays)
-    average_sr = total_sr / len(recent_plays)
-    
-    return jsonify({"suggested_sr": average_sr, "plays_considered": len(recent_plays)})
-
-@app.route('/api/recommend', methods=['GET'])
-def get_recommendation():
-    try:
-        target_sr = request.args.get('sr', type=float)
-        max_bpm = request.args.get('bpm', type=int)
-        mods = request.args.get('mods', 0, type=int)
-        exclude_str = request.args.get('exclude', '')
-        excluded_ids = exclude_str.split(',') if exclude_str else []
-        
-        if target_sr is None or max_bpm is None:
-            return jsonify({"error": "Missing 'sr' or 'bpm' parameters."}), 400
-
-        beatmap = database.get_recommendation(target_sr, max_bpm, mods, excluded_ids)
-        
-        if beatmap:
-            return jsonify(beatmap)
-        else:
-            return jsonify({"message": "No new map found. Try adjusting the values."}), 404
-            
-    except Exception as e:
-        logging.error(f"Error in recommendation endpoint: {e}", exc_info=True)
-        return jsonify({"error": "An internal error occurred."}), 500
-
-@app.route('/api/songs/<path:file_path>')
-def serve_song_file(file_path):
-    osu_folder = os.getenv('OSU_FOLDER')
-    if not osu_folder:
-        return jsonify({"error": "OSU_FOLDER path not set"}), 500
-    songs_dir = os.path.join(osu_folder, 'Songs')
-    return send_from_directory(songs_dir, file_path)
-
-@app.route('/api/config', methods=['GET'])
-def get_config():
-    """Gets current configuration from .env file."""
-    config = {
-        "osu_folder": os.getenv("OSU_FOLDER", ""),
-        "default_player": os.getenv("DEFAULT_PLAYER", "")
-    }
-    return jsonify(config)
-
-@app.route('/api/config', methods=['POST'])
-def save_config():
-    """Saves configuration to the .env file."""
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid request body"}), 400
-
-    try:
-        # The env_path is already determined globally when the app starts
-        if 'osu_folder' in data:
-            set_key(env_path, "OSU_FOLDER", data['osu_folder'])
-        if 'default_player' in data:
-            set_key(env_path, "DEFAULT_PLAYER", data['default_player'])
-        
-        # Reload the environment variables for the current process
-        load_dotenv(dotenv_path=env_path, override=True)
-
-        return jsonify({"message": "Configuration saved successfully."}), 200
-    except Exception as e:
-        logging.error(f"Failed to save configuration: {e}", exc_info=True)
-        return jsonify({"error": "Failed to write to .env file."}), 500
-
-
-@app.route('/api/scan', methods=['POST'])
-def scan_replays_folder_endpoint():
-    if TASK_PROGRESS['scan']['status'] == 'running':
-        return jsonify({"error": "Scan already in progress."}), 409
-    
-    thread = threading.Thread(target=scan_replays_task)
-    thread.daemon = True
-    thread.start()
-    return jsonify({"status": "Scan process started."}), 202
-
-@app.route('/api/sync-beatmaps', methods=['POST'])
-def sync_beatmaps_endpoint():
-    if TASK_PROGRESS['sync']['status'] == 'running':
-        return jsonify({"error": "Sync already in progress."}), 409
-
-    thread = threading.Thread(target=sync_local_beatmaps_task)
-    thread.daemon = True
-    thread.start()
-    return jsonify({"status": "Sync process started."}), 202
-
-@app.route('/api/progress-status', methods=['GET'])
-def get_progress_status():
-    return jsonify(TASK_PROGRESS)
-              
+# --- Frontend Serving ---
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_index(path):
+    """Serves the frontend application."""
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
     return send_from_directory(app.static_folder, 'index.html')
 
-def process_osu_file_and_cache(osu_file_path, base_bpm, md5):
-    try:
-        details = parser.parse_osu_file(osu_file_path)
-        if details.get('bpm'):
-            base_bpm = details['bpm']
-
-        rosu_map = rosu_pp_py.Beatmap(path=osu_file_path)
-        
-        nomod_diff_attrs = rosu_pp_py.Difficulty().calculate(rosu_map)
-        details['stars'] = nomod_diff_attrs.stars
-        
-        mods_to_cache = [2, 16, 64, 256]
-        mod_cache_results = []
-
-        for mod_int in mods_to_cache:
-            diff_calc = rosu_pp_py.Difficulty(mods=mod_int)
-            diff_attrs = diff_calc.calculate(rosu_map)
-            
-            attr_builder = rosu_pp_py.BeatmapAttributesBuilder(map=rosu_map, mods=mod_int)
-            map_attrs = attr_builder.build()
-
-            mod_cache_results.append({
-                'md5_hash': md5,
-                'mods': mod_int,
-                'stars': round(diff_attrs.stars, 2),
-                'ar': round(map_attrs.ar, 2),
-                'od': round(map_attrs.od, 2),
-                'cs': round(map_attrs.cs, 2),
-                'hp': round(map_attrs.hp, 2),
-                'bpm': round(base_bpm * map_attrs.clock_rate, 2),
-            })
-
-        return md5, details, mod_cache_results
-    except Exception as e:
-        logging.warning(f"Could not parse/process file {osu_file_path}: {e}")
-        return md5, {}, []
-
-def sync_local_beatmaps_task():
-    progress = TASK_PROGRESS['sync']
-    progress['status'] = 'running'
-    progress['current'] = 0
-    progress['total'] = 0
-    progress['message'] = 'Initializing...'
-    
-    try:
-        osu_folder = os.getenv('OSU_FOLDER')
-        if not osu_folder: raise ValueError("OSU_FOLDER environment variable is not set.")
-        
-        db_path = os.path.join(osu_folder, 'osu!.db')
-        if not os.path.exists(db_path): raise FileNotFoundError(f"osu!.db not found at {db_path}")
-
-        songs_path = os.path.join(osu_folder, 'Songs')
-        
-        progress['message'] = 'Parsing osu!.db...'
-        beatmap_data = parser.parse_osu_db(db_path)
-        
-        tasks = []
-        for md5, beatmap in beatmap_data.items():
-             if beatmap.get('folder_name') and beatmap.get('osu_file_name') and beatmap.get('game_mode') == 0:
-                osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
-                if os.path.exists(osu_file_path):
-                    tasks.append((osu_file_path, beatmap.get('bpm', 0), md5))
-
-        progress['message'] = f"Calculating difficulty for {len(tasks)} beatmaps..."
-        progress['total'] = len(tasks)
-        progress['current'] = 0
-        all_mod_caches = []
-
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_md5 = {executor.submit(process_osu_file_and_cache, path, bpm, md5): md5 for path, bpm, md5 in tasks}
-            
-            for future in concurrent.futures.as_completed(future_to_md5):
-                progress['current'] += 1
-                md5 = future_to_md5[future]
-                beatmap_name = beatmap_data.get(md5, {}).get('osu_file_name', 'beatmap')
-                progress['message'] = f"Processing {beatmap_name}..."
-                
-                try:
-                    _md5, result_data, mod_caches = future.result()
-                    if result_data:
-                        beatmap_data[_md5].update(result_data)
-                    if mod_caches:
-                        all_mod_caches.extend(mod_caches)
-                except Exception as e:
-                    logging.error(f"Error processing future for {beatmap_name}: {e}", exc_info=True)
-
-        progress['message'] = 'Saving beatmaps to database...'
-        database.add_or_update_beatmaps(beatmap_data)
-        
-        if all_mod_caches:
-            progress['message'] = f'Saving {len(all_mod_caches)} mod difficulty caches...'
-            database.add_beatmap_mod_cache(all_mod_caches)
-
-        progress['status'] = 'complete'
-        progress['message'] = 'Beatmap database synchronization complete.'
-    except Exception as e:
-        logging.error(f"Error in sync task: {e}", exc_info=True)
-        progress['status'] = 'error'
-        progress['message'] = str(e)
-
-def scan_replays_task():
-    progress = TASK_PROGRESS['scan']
-    progress['status'] = 'running'
-    progress['current'] = 0
-    progress['total'] = 0
-    progress['message'] = 'Initializing...'
-
-    try:
-        osu_folder = os.getenv('OSU_FOLDER')
-        if not osu_folder: raise ValueError("OSU_FOLDER path not set in .env file")
-        
-        replays_path = os.path.join(osu_folder, 'Data', 'r')
-        songs_path = os.path.join(osu_folder, 'Songs')
-        if not os.path.isdir(replays_path): raise FileNotFoundError(f"Replays directory not found at: {replays_path}")
-
-        all_beatmaps = {b['md5_hash']: b for b in database.get_all_beatmaps(limit=100000)['beatmaps']}
-        if not all_beatmaps: logging.warning("Beatmap DB is empty. Replay data may be incomplete.")
-
-        replay_files = [f for f in os.listdir(replays_path) if f.endswith('.osr')]
-        progress['total'] = len(replay_files)
-
-        for i, file_name in enumerate(replay_files):
-            progress['current'] = i + 1
-            progress['message'] = f'Scanning {file_name}...'
-            
-            file_path = os.path.join(replays_path, file_name)
-            try:
-                replay_data = parser.parse_replay_file(file_path)
-                if not replay_data or not replay_data.get('replay_md5'): continue
-                
-                beatmap_info = all_beatmaps.get(replay_data['beatmap_md5'])
-                if beatmap_info and beatmap_info.get('folder_name') and beatmap_info.get('osu_file_name'):
-                    osu_file_path = os.path.join(songs_path, beatmap_info['folder_name'], beatmap_info['osu_file_name'])
-                    if os.path.exists(osu_file_path):
-                        pp_info = parser.calculate_pp(osu_file_path, replay_data)
-                        replay_data.update(pp_info)
-                        osu_details = parser.parse_osu_file(osu_file_path)
-                        replay_data.update(osu_details)
-                        database.update_beatmap_details(replay_data['beatmap_md5'], osu_details)
-                
-                database.add_replay(replay_data)
-            except Exception as e:
-                logging.error(f"Could not process file {file_name}: {e}", exc_info=True)
-        
-        progress['status'] = 'complete'
-        progress['message'] = f"Scan complete. Processed {progress['total']} replays."
-    except Exception as e:
-        logging.error(f"Error in scan task: {e}", exc_info=True)
-        progress['status'] = 'error'
-        progress['message'] = str(e)
-
-
+# --- Server Execution ---
 def run_server():
+    """Runs the Flask server using waitress for production bundles."""
     if IS_BUNDLED:
         from waitress import serve
         serve(app, host="127.0.0.1", port=5000)
     else:
+        # Use Flask's built-in server for development (with debug=False to avoid reloader issues)
         app.run(host="127.0.0.1", port=5000, debug=False)
 
+# --- Main Application Entry Point ---
 if __name__ == '__main__':
+    # Initialize the database on startup
     database.init_db()
+
+    # Start the backend server in a separate thread
     server_thread = threading.Thread(target=run_server)
     server_thread.daemon = True
     server_thread.start()
     logging.info("Backend server started in a background thread.")
 
+    # Create the pywebview window to display the frontend
     window = webview.create_window(
         'osu! Local Score Tracker',
         'http://127.0.0.1:5000',
@@ -496,10 +58,13 @@ if __name__ == '__main__':
     )
 
     def on_closing():
+        """Handle window closing event to gracefully shut down the app."""
         logging.info("Webview window is closing. Shutting down application.")
         if not IS_BUNDLED:
+            # In development, a SIGINT is needed to stop the Flask server
             os.kill(os.getpid(), signal.SIGINT)
 
     window.events.closing += on_closing
 
+    # Start the pywebview event loop
     webview.start(debug=not IS_BUNDLED)
