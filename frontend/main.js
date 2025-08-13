@@ -57,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function switchView(viewName) {
         stopAudio(); // Stop any playing music when changing views
+        document.getElementById('status-message').textContent = ''; // Clear status message on view switch
         document.querySelectorAll('#main-content .view').forEach(v => v.classList.remove('active'));
         navLinks.forEach(link => link.classList.remove('active'));
 
