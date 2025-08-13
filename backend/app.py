@@ -161,9 +161,8 @@ def scan_replays_folder():
         sync_local_beatmaps()
         logging.info("Beatmap database sync complete.")
 
-        all_replays = database.get_all_replays()
-        existing_replays = {r['replay_md5']: r for r in all_replays}
-        all_beatmaps = {b['md5_hash']: b for b in database.get_all_beatmaps()} # Assumes a get_all_beatmaps function
+        # Fetch all beatmaps into memory for quick lookups during the scan
+        all_beatmaps = {b['md5_hash']: b for b in database.get_all_beatmaps()}
 
         replay_files = [f for f in os.listdir(replays_path) if f.endswith('.osr')]
         for file_name in replay_files:
@@ -172,16 +171,14 @@ def scan_replays_folder():
                 replay_data = parser.parse_replay_file(file_path)
                 if not replay_data or not replay_data.get('replay_md5'): continue
                 
-                # Skip if replay exists and has PP data
-                existing = existing_replays.get(replay_data['replay_md5'])
-                if existing and existing.get('pp') is not None:
-                    continue
-
-                # Initialize fields
+                # The logic to check for existing replays is now handled by the
+                # "INSERT ... ON CONFLICT" query in `database.add_replay`,
+                # which is more efficient. We just process every file.
+                
                 replay_data.update({'pp': None, 'stars': None, 'map_max_combo': None, 'bpm': None, 'bpm_min': None, 'bpm_max': None})
                 beatmap_info = all_beatmaps.get(replay_data['beatmap_md5'])
                 
-                if beatmap_info:
+                if beatmap_info and beatmap_info.get('folder_name') and beatmap_info.get('osu_file_name'):
                     osu_file_path = os.path.join(songs_path, beatmap_info['folder_name'], beatmap_info['osu_file_name'])
                     if os.path.exists(osu_file_path):
                         pp_info = parser.calculate_pp(osu_file_path, replay_data)
@@ -197,7 +194,7 @@ def scan_replays_folder():
     except Exception as e:
         logging.error(f"An error occurred during scan: {str(e)}", exc_info=True)
         return jsonify({"error": f"An error occurred during scan: {str(e)}"}), 500
-          
+              
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_index(path):
