@@ -42,12 +42,14 @@ export function createReplayCard(item) {
     
     const aimValue = item.aim ? item.aim.toFixed(2) : null;
     const speedValue = item.speed ? item.speed.toFixed(2) : null;
+    const techValue = item.slider_factor ? item.slider_factor.toFixed(2) : null;
     let skillHtml = '';
     if (aimValue && speedValue) {
-        skillHtml = `
-            <span class="stat-skill stat-aim" title="Aim Difficulty: ${aimValue}">🎯 ${aimValue}</span>
-            <span class="stat-skill stat-speed" title="Speed Difficulty: ${speedValue}">⚡ ${speedValue}</span>
-        `;
+        skillHtml += `<span class="stat-skill stat-aim" title="Aim Difficulty: ${aimValue}">🎯 ${aimValue}</span>`;
+        skillHtml += `<span class="stat-skill stat-speed" title="Speed Difficulty: ${speedValue}">⚡ ${speedValue}</span>`;
+    }
+    if (techValue) {
+        skillHtml += `<span class="stat-skill stat-tech" title="Technical Difficulty (Slider Factor): ${techValue}">⚙️ ${techValue}</span>`;
     }
 
 
