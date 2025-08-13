@@ -76,14 +76,16 @@ def _calculate_accuracy(replay):
 def get_beatmaps():
     page = request.args.get('page', 1, type=int)
     limit = request.args.get('limit', 50, type=int)
-    return jsonify(database.get_all_beatmaps(page=page, limit=limit))
+    search_term = request.args.get('search')
+    return jsonify(database.get_all_beatmaps(page=page, limit=limit, search_term=search_term))
 
 @api_blueprint.route('/replays', methods=['GET'])
 def get_replays():
     player_name = request.args.get('player_name')
     page = request.args.get('page', 1, type=int)
     limit = request.args.get('limit', 50, type=int)
-    replays_data = database.get_all_replays(player_name=player_name, page=page, limit=limit)
+    search_term = request.args.get('search')
+    replays_data = database.get_all_replays(player_name=player_name, page=page, limit=limit, search_term=search_term)
     for replay in replays_data['replays']:
         _add_rank_to_replay(replay)
     return jsonify(replays_data)
