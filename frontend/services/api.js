@@ -30,18 +30,26 @@ export const getPlayerStats = async (playerName) => {
 
 export const scanReplays = async () => {
     const response = await fetch(`${API_BASE_URL}/scan`, { method: 'POST' });
-    if (!response.ok) {
+    if (response.status !== 202 && !response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to scan replays.');
+        throw new Error(errorData.error || 'Failed to start replay scan.');
     }
     return response.json();
 };
 
 export const syncBeatmaps = async () => {
     const response = await fetch(`${API_BASE_URL}/sync-beatmaps`, { method: 'POST' });
-     if (!response.ok) {
+     if (response.status !== 202 && !response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to sync beatmap database.');
+        throw new Error(errorData.error || 'Failed to start beatmap sync.');
+    }
+    return response.json();
+};
+
+export const getProgressStatus = async () => {
+    const response = await fetch(`${API_BASE_URL}/progress-status`);
+    if (!response.ok) {
+        throw new Error('Failed to fetch progress status.');
     }
     return response.json();
 };
