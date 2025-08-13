@@ -14,7 +14,7 @@ The model requires four primary user inputs to begin a session:
 1.  **Target Star Rating (SR):** The difficulty level the player wants to start at. This can be entered manually or suggested by the application.
 2.  **Max BPM:** The maximum "main" BPM the player is comfortable playing at for the session.
 3.  **Mods:** The user can select a combination of mods (EZ, HD, HR, DT, HT, FL) to train.
-4.  **Skill Focus:** The user can specify a type of skill to target, which will use an advanced heuristic to filter maps. See Section 4.4 for details.
+4.  **Skill Focus:** The user can specify a type of skill to target. See Section 4.4 for the list of focuses and their logic.
 
 ### 4.2.2. Search Criteria
 
@@ -32,42 +32,42 @@ The current implementation requires manual user feedback to guide the session.
 3.  **Play:** The user plays the recommended map in the osu! client.
 4.  **Feedback:** The user returns to the tracker and reports whether they passed or failed their personal goal for that map, which adjusts the session SR accordingly.
 
-## 4.4. Defining Skill-Based Difficulty: An Advanced Model
+## 4.4. Skill Focus Categories & Heuristics
 
-To provide meaningful recommendations, we must move beyond a simple aim-vs-speed dichotomy. By leveraging the detailed output of `rosu-pp`, we can define more nuanced skill categories.
+To provide meaningful recommendations, we use a set of five distinct skill categories. Each category uses a specific heuristic based on detailed metrics from `rosu-pp` to filter maps.
 
-### 4.4.1. Key Metrics from `rosu-pp`
+### 4.4.1. Key Metrics
 
-The `DifficultyAttributes` object provides several crucial values for our model:
+-   **`aim` & `speed`**: The peak difficulty values for aim and speed skills.
+-   **`slider_factor`**: A ratio (<= 1.0) of how much aim strain is preserved in sliders. A value near 1.0 means sliders are as aim-intensive as jumps.
+-   **`speed_note_count`**: The number of notes weighted by their speed difficulty. A high value indicates a map is tap-heavy.
+-   **`aim_difficult_slider_count`**: The raw, weighted difficulty sum of all sliders. A high value indicates a map has complex sliders.
+-   **`n_sliders` & `n_objects`**: Raw counts of sliders and total hitobjects, used for normalization.
 
--   **`aim` & `speed`**: Represent the *peak difficulty* of each skill. A high value means at least one pattern in the map is very demanding for that skill.
--   **`aim_difficult_slider_count`**: The raw, weighted sum of the difficulty of every slider in the map. The difficulty is determined by path length, duration, and curvature. This is our primary indicator for the **absolute amount of difficult slider content**.
--   **`slider_factor`**: A ratio <= 1.0 that represents how much of the potential jump-based aim strain is "preserved" by sliders. A value of 1.0 means sliders are as difficult to aim as circles. A lower value indicates sliders provide more "rest" and reduce the overall aim strain. It measures aim-intensity, not technicality.
--   **`speed_note_count`**: The number of notes considered for speed calculation, weighted by their difficulty. This is a strong indicator of how much "tapping" is in the map.
--   **`n_sliders` & `n_objects`**: The raw counts of sliders and total objects, used for normalization.
+### 4.4.2. Skill Focus Definitions
 
-### 4.4.2. Proposed Skill Categories & Heuristics
+This is the definitive set of skill focuses to be implemented in the recommender.
 
-Using these metrics, we can define the following skill focuses for the recommender.
+1.  **Balanced**
+    -   **Description**: A generalist category with no specific skill filtering. Provides a variety of maps.
+    -   **Heuristic**: No additional `WHERE` clause is applied.
 
-1.  **Jump Aim**
-    -   **Description:** Maps focused on snappy, wide-angle, or rhythmically complex jumps between circles.
-    -   **Heuristic:** A high ratio of `aim` to `speed` difficulty. A high `slider_factor` (close to 1.0) indicates that even the sliders behave like jumps, reinforcing the category.
-    -   **`WHERE` clause:** `aim > speed * 1.1 AND slider_factor > 0.95`
+2.  **Jumps**
+    -   **Description**: Prioritizes maps where difficulty is driven by discrete, snappy aim between objects (typically circles).
+    -   **Heuristic**: The map's peak `aim` must be significantly higher than its peak `speed`, and the `slider_factor` must be high, indicating sliders behave like jumps and do not offer rest.
+    -   **`WHERE` clause**: `aim > speed * 1.1 AND slider_factor > 0.95`
 
-2.  **Technical Aim**
-    -   **Description:** Maps where difficulty comes from reading and executing complex or fast slider patterns. This is our most sophisticated category.
-    -   **Heuristic:** We want maps with a high *average slider complexity*. This is best measured by normalizing the total slider difficulty by the number of sliders. A high value here indicates the map is dense with challenging sliders.
-    -   **`WHERE` clause:** `(aim_difficult_slider_count / n_sliders) > 0.5` (Note: threshold `0.5` is a placeholder for tuning) AND `n_sliders > (n_objects * 0.2)` (ensures sliders are a significant portion of the map).
+3.  **Flow**
+    -   **Description**: Prioritizes maps where aim difficulty comes from reading and executing continuous, complex slider patterns.
+    -   **Heuristic**: The map must have a high "average slider complexity," found by normalizing the total slider difficulty by the number of sliders. It must also contain a significant proportion of sliders.
+    -   **`WHERE` clause**: `(aim_difficult_slider_count / NULLIF(n_sliders, 0)) > 0.5 AND n_sliders > (n_objects * 0.2)`
 
-3.  **Burst Speed**
-    -   **Description:** Maps focused on short, intense bursts of high-speed tapping, often with simpler aim patterns.
-    -   **Heuristic:** High `speed` difficulty relative to `aim`. A moderate `speed_note_count` (normalized by total objects) suggests the speed is not sustained over the entire map.
-    -   **`WHERE` clause:** `speed > aim * 1.1 AND (speed_note_count / n_objects) < 0.4`
+4.  **Speed**
+    -   **Description**: Prioritizes maps focused on short, intense tapping bursts.
+    -   **Heuristic**: The map's peak `speed` must be significantly higher than its peak `aim`, and the proportion of "speed notes" must be relatively low, indicating the speed is not sustained.
+    -   **`WHERE` clause**: `speed > aim * 1.1 AND (speed_note_count / n_objects) < 0.4`
 
-4.  **Stream / Stamina Speed**
-    -   **Description:** Maps featuring long, continuous streams that test tapping consistency and stamina.
-    -   **Heuristic:** The key indicator is a high `speed_note_count` normalized by total objects, signifying that a large portion of the map is a tapping challenge. Aim and speed values are often comparable.
-    -   **`WHERE` clause:** `(speed_note_count / n_objects) > 0.4`
-
-These heuristics provide a much more powerful and accurate way to filter maps. Implementing this will require caching these additional attributes in our database.
+5.  **Stamina**
+    -   **Description**: Prioritizes maps with long, sustained tapping sections like streams, which test consistency.
+    -   **Heuristic**: The map must have a high proportion of "speed notes," indicating that tapping is a persistent challenge throughout the map.
+    -   **`WHERE` clause**: `(speed_note_count / n_objects) > 0.4`
