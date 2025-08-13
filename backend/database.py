@@ -1,5 +1,6 @@
 import sqlite3
 import logging
+import json
 
 DATABASE_FILE = 'osu_tracker.db'
 
@@ -240,7 +241,7 @@ def add_or_update_beatmaps(beatmaps_data):
         beatmap_tuples.append((
             md5, data.get('artist'), data.get('title'), data.get('creator'), 
             data.get('difficulty'), data.get('folder_name'), data.get('osu_file_name'),
-            str(data.get('grades', {})), data.get('last_played_date'),
+            json.dumps(data.get('grades', {})), data.get('last_played_date'),
             data.get('num_hitcircles'), data.get('num_sliders'), data.get('num_spinners'),
             data.get('ar'), data.get('cs'), data.get('hp'), data.get('od'), data.get('bpm')
         ))
@@ -259,7 +260,6 @@ def add_or_update_beatmaps(beatmaps_data):
     logging.info(f"Database sync complete. Processed {len(beatmap_tuples)} beatmaps. "
                  f"({cursor.rowcount} new entries added)")
     conn.close()
-
 def update_replay_pp(replay_md5, pp, stars, map_max_combo):
     """Updates the pp, stars, and map_max_combo for an existing replay record."""
     conn = get_db_connection()
