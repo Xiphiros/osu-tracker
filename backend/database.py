@@ -350,7 +350,8 @@ def get_recommendation(target_sr, max_bpm, mods):
     cursor = conn.cursor()
 
     # Mod constants for bitwise checks
-    mods_dt = (mods & 64) > 0
+    mods_dt = (mods & 64) > 0 or (mods & 512) > 0  # DT or NC
+    mods_ht = (mods & 256) > 0
     mods_hr = (mods & 16) > 0
     mods_ez = (mods & 2) > 0
 
@@ -358,34 +359,33 @@ def get_recommendation(target_sr, max_bpm, mods):
     params = []
 
     # Heuristics: Adjust SQL query to find a good pool of candidates.
-    # This pre-filters the beatmaps so we don't have to run rosu-pp on the entire database.
     if mods_dt:
-        # For DT, we need maps with lower BPM and SR.
-        # map_bpm * 1.5 <= max_bpm  ->  map_bpm <= max_bpm / 1.5
         base_query += " AND bpm <= ?"
         params.append(max_bpm / 1.5)
-        # Search for maps with a significantly lower SR.
         base_query += " AND stars BETWEEN ? AND ?"
         params.extend([target_sr * 0.5, target_sr * 0.8])
+    elif mods_ht:
+        base_query += " AND bpm <= ?"
+        params.append(max_bpm / 0.75)
+        base_query += " AND stars BETWEEN ? AND ?"
+        params.extend([target_sr, target_sr * 1.5])
     elif mods_hr:
-        # For HR, we need maps with a somewhat lower SR.
         base_query += " AND bpm <= ?"
         params.append(max_bpm)
         base_query += " AND stars BETWEEN ? AND ?"
         params.extend([target_sr * 0.7, target_sr * 0.95])
     elif mods_ez:
-        # For EZ, we need maps with a higher SR.
         base_query += " AND bpm <= ?"
         params.append(max_bpm)
         base_query += " AND stars BETWEEN ? AND ?"
         params.extend([target_sr * 1.2, target_sr * 2.5])
-    else:  # NoMod or mods that don't affect star rating (HD, FL).
+    else:
         base_query += " AND bpm <= ?"
         params.append(max_bpm)
         base_query += " AND stars >= ? AND stars < ?"
         params.extend([target_sr, target_sr + 0.1])
 
-    base_query += " ORDER BY RANDOM() LIMIT 100"  # Get 100 random candidates to check.
+    base_query += " ORDER BY RANDOM() LIMIT 100"
     
     logging.debug(f"Recommendation query: {base_query} with params {params}")
     cursor.execute(base_query, params)
@@ -413,26 +413,22 @@ def get_recommendation(target_sr, max_bpm, mods):
 
         try:
             rosu_map = rosu_pp_py.Beatmap(path=osu_file_path)
-            
-            # Calculate modded difficulty attributes
             diff_calc = rosu_pp_py.Difficulty(mods=mods)
             diff_attrs = diff_calc.calculate(rosu_map)
             modded_stars = diff_attrs.stars
             
-            # Calculate modded BPM
-            clock_rate = rosu_pp_py.BeatmapAttributesBuilder(mods=mods).build().clock_rate
+            attr_builder = rosu_pp_py.BeatmapAttributesBuilder(map=rosu_map, mods=mods)
+            modded_map_attrs = attr_builder.build()
+            clock_rate = modded_map_attrs.clock_rate
             modded_bpm = beatmap.get('bpm', 0) * clock_rate
             
             logging.debug(f"Checking candidate {beatmap['osu_file_name']}: Modded SR={modded_stars:.2f}, Modded BPM={modded_bpm:.2f}")
 
-            # Check if the map fits the criteria AFTER mods are applied
             if target_sr <= modded_stars < sr_upper_bound and modded_bpm <= max_bpm:
-                # We found a match! Update the beatmap dict with modded values for the UI.
-                attr_builder = rosu_pp_py.BeatmapAttributesBuilder(map=rosu_map, mods=mods)
-                modded_map_attrs = attr_builder.build()
-
                 beatmap['stars'] = round(modded_stars, 2)
-                beatmap['bpm'] = round(modded_bpm, 2)
+                beatmap['bpm'] = round(modded_bpm)
+                if beatmap.get('bpm_min'): beatmap['bpm_min'] = round(beatmap['bpm_min'] * clock_rate)
+                if beatmap.get('bpm_max'): beatmap['bpm_max'] = round(beatmap['bpm_max'] * clock_rate)
                 beatmap['ar'] = round(modded_map_attrs.ar, 2)
                 beatmap['cs'] = round(modded_map_attrs.cs, 2)
                 beatmap['hp'] = round(modded_map_attrs.hp, 2)
