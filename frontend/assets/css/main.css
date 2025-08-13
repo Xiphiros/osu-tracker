@@ -108,6 +108,29 @@ main#main-content {
     font-size: 0.9em;
 }
 
+/* Search Bar Styles */
+.search-container {
+    margin-bottom: 20px;
+}
+.search-input {
+    width: 100%;
+    padding: 10px 15px;
+    font-size: 1em;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    box-sizing: border-box;
+}
+.search-input::placeholder {
+    color: #888;
+}
+.search-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(0, 170, 255, 0.3);
+}
+
 /* Profile View styles */
 #profile-header {
     margin-bottom: 20px;
