@@ -177,8 +177,9 @@ def sync_local_beatmaps_task():
                 if os.path.exists(osu_file_path):
                     try:
                         beatmap.update(parser.parse_osu_file(osu_file_path))
+                        beatmap.update(parser.calculate_difficulty(osu_file_path))
                     except Exception as e:
-                        logging.warning(f"Could not parse .osu file {osu_file_path}: {e}")
+                        logging.warning(f"Could not parse or process .osu file {osu_file_path}: {e}")
         
         progress['message'] = 'Saving to database...'
         database.add_or_update_beatmaps(beatmap_data)
