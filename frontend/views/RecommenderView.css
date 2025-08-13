@@ -4,7 +4,7 @@
     gap: 20px;
 }
 
-.recommender-controls {
+.recommender-controls, .session-planner-controls, .goal-settings-container {
     background-color: var(--card-bg);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -120,8 +120,6 @@
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
-    flex-basis: 100%;
-    order: -1;
     padding-bottom: 15px;
     border-bottom: 1px solid var(--border-color);
 }
@@ -147,28 +145,6 @@
     color: white;
     font-weight: bold;
 }
-
-.goal-settings-container {
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-.goal-settings-container h3 {
-    margin: 0 0 5px 0;
-    font-size: 1.2em;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border-color);
-}
-.goal-inputs {
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-}
-
 
 #recommender-result {
     min-height: 160px;
@@ -271,4 +247,124 @@
 #detected-replay-card-container {
     width: 100%;
     max-width: 480px;
+}
+
+
+/* New Session Planner Styles */
+.session-planner-controls h3, .session-plan-display h3 {
+    margin-top: 0;
+    font-size: 1.2em;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+.planner-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 15px 20px;
+    align-items: end;
+}
+.planner-form-grid .mod-selection-container {
+    grid-column: 1 / -1; /* Span full width */
+    border-bottom: none;
+    padding-bottom: 0;
+}
+#add-step-button {
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    grid-column: 1 / -1; /* Span full width on smaller screens */
+    max-width: 200px;
+    justify-self: end;
+}
+#add-step-button:hover {
+    background-color: var(--accent-hover);
+}
+.session-plan-display {
+    margin-top: 20px;
+    background-color: #222;
+    padding: 20px;
+    border-radius: 8px;
+}
+#session-queue-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 20px 0;
+}
+.queue-item {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+}
+.queue-item.active-step {
+    border-left: 4px solid var(--accent-color);
+}
+.queue-item-details { flex-grow: 1; }
+.queue-item-details .count { font-weight: bold; font-size: 1.1em; }
+.queue-item-details .mods { margin: 0 5px; font-weight: 500; color: var(--accent-color); }
+.queue-item-goals { font-size: 0.9em; color: #ccc; margin-top: 5px; }
+.queue-item-remove {
+    background: #555;
+    border: none;
+    color: white;
+    border-radius: 4px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+.queue-item-remove:hover { background: #666; }
+#start-session-button {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+}
+#start-session-button:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+
+#session-progress-display {
+    text-align: center;
+    padding: 15px;
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 20px;
+}
+#session-progress-text {
+    font-size: 1.2em;
+    font-weight: 500;
+}
+#end-session-button {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    font-size: 0.85em;
+    border-radius: 4px;
+    cursor: pointer;
+}
+#end-session-button:hover {
+    background-color: #c82333;
+}
+#session-progress-display .recommender-actions-wrapper {
+    justify-content: center;
+}
+#session-progress-display .control-group {
+    flex-direction: row;
+    align-items: center;
 }
