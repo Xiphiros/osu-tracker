@@ -3,6 +3,7 @@ import sys
 import logging
 import threading
 import webview
+import json
 from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -36,30 +37,24 @@ CORS(app)
 def get_replays():
     """API endpoint to get all stored replay data, enriched with beatmap details."""
     player_name = request.args.get('player_name')
-    osu_folder = os.getenv('OSU_FOLDER')
-    if not osu_folder:
-        return jsonify({"error": "OSU_FOLDER path not set"}), 500
-
-    songs_path = os.path.join(osu_folder, 'Songs')
     
     def get_rank(grade_val):
         ranks = {0:"SS", 1:"S", 2:"SS", 3:"S", 4:"A", 5:"B", 6:"C", 7:"D"}
         return ranks.get(grade_val, "N/A")
 
-    # The database now returns fully enriched replays.
+    # The database now returns fully enriched replays via the JOIN.
     all_replays = database.get_all_replays(player_name=player_name)
     
-    # Post-process to add dynamic data not stored in the DB (like rank)
+    # Post-process to add dynamic data not stored in the DB (like rank).
+    # All file-system and heavy calculation logic has been removed for performance.
     for replay in all_replays:
-        beatmap_info = replay.get('beatmap')
-        if not beatmap_info:
-            replay['rank'] = "N/A"
-            continue
-
+        beatmap_info = replay.get('beatmap', {})
+        
+        # Safely parse grades from the JSON string stored in the database.
         try:
-            # Grades are stored as a string representation of a dict, e.g., "{'osu': 4}"
-            grades = eval(beatmap_info.get('grades', '{}'))
-        except:
+            grades_str = beatmap_info.get('grades')
+            grades = json.loads(grades_str) if grades_str else {}
+        except (json.JSONDecodeError, TypeError):
             grades = {}
 
         game_mode = replay.get('game_mode')
@@ -69,38 +64,6 @@ def get_replays():
         elif game_mode == 2: grade_val = grades.get('ctb')
         elif game_mode == 3: grade_val = grades.get('mania')
         replay['rank'] = get_rank(grade_val)
-
-        # This back-filling logic is still valuable for replays on maps that
-        # might not be in the database yet, or for calculating PP on the fly.
-        if beatmap_info and beatmap_info.get('folder_name'):
-            osu_file_path = os.path.join(
-                songs_path, beatmap_info['folder_name'], beatmap_info['osu_file_name']
-            )
-
-            if os.path.exists(osu_file_path):
-                # Back-fill PP if it's missing from the replay record
-                if replay.get('pp') is None:
-                    pp_info = parser.calculate_pp(osu_file_path, replay)
-                    if pp_info and pp_info.get('pp') is not None:
-                        replay.update(pp_info)
-                        database.update_replay_pp(
-                            replay['replay_md5'], pp_info['pp'], pp_info['stars'], pp_info['map_max_combo']
-                        )
-
-                # Back-fill detailed BPM if it's missing
-                if replay['beatmap'].get('bpm_min') is None:
-                    osu_details = parser.parse_osu_file(osu_file_path)
-                    if osu_details.get('bpm') is not None:
-                        # Update the database for both the replay and the beatmap table
-                        database.update_replay_bpm(
-                            replay['replay_md5'],
-                            osu_details.get('bpm'),
-                            osu_details.get('bpm_min'),
-                            osu_details.get('bpm_max')
-                        )
-                        # We don't have a specific beatmap update function for this yet,
-                        # but this could be added in the future.
-                        replay['beatmap'].update(osu_details)
 
     return jsonify(all_replays)
 
