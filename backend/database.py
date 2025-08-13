@@ -231,7 +231,8 @@ def get_all_beatmaps():
 def add_or_update_beatmaps(beatmaps_data):
     """
     Inserts or updates a batch of beatmaps in the database.
-    This uses an 'upsert' mechanism to be efficient.
+    This uses an 'upsert' mechanism to efficiently add new maps and 
+    backfill details for existing ones.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -243,22 +244,44 @@ def add_or_update_beatmaps(beatmaps_data):
             data.get('difficulty'), data.get('folder_name'), data.get('osu_file_name'),
             json.dumps(data.get('grades', {})), data.get('last_played_date'),
             data.get('num_hitcircles'), data.get('num_sliders'), data.get('num_spinners'),
-            data.get('ar'), data.get('cs'), data.get('hp'), data.get('od'), data.get('bpm')
+            data.get('ar'), data.get('cs'), data.get('hp'), data.get('od'), data.get('bpm'),
+            data.get('audio_file'), data.get('background_file'), 
+            data.get('bpm_min'), data.get('bpm_max')
         ))
 
-    # Using INSERT OR IGNORE as we only want to add new maps from osu!.db
-    # We don't want to overwrite potentially richer data from an API in the future.
+    # This "upsert" query will insert a new row if the md5_hash doesn't exist.
+    # If it does exist (ON CONFLICT), it updates the record. COALESCE is used
+    # to ensure we don't overwrite existing parsed data with a NULL value if
+    # a subsequent parse of the .osu file fails for some reason.
     cursor.executemany('''
-        INSERT OR IGNORE INTO beatmaps (
+        INSERT INTO beatmaps (
             md5_hash, artist, title, creator, difficulty, folder_name, osu_file_name,
             grades, last_played_date, num_hitcircles, num_sliders, num_spinners,
-            ar, cs, hp, od, bpm
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ar, cs, hp, od, bpm,
+            audio_file, background_file, bpm_min, bpm_max
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(md5_hash) DO UPDATE SET
+            artist=excluded.artist,
+            title=excluded.title,
+            creator=excluded.creator,
+            difficulty=excluded.difficulty,
+            folder_name=excluded.folder_name,
+            osu_file_name=excluded.osu_file_name,
+            grades=excluded.grades,
+            last_played_date=excluded.last_played_date,
+            num_hitcircles=excluded.num_hitcircles,
+            num_sliders=excluded.num_sliders,
+            num_spinners=excluded.num_spinners,
+            ar=excluded.ar, cs=excluded.cs, hp=excluded.hp, od=excluded.od, bpm=excluded.bpm,
+            audio_file=COALESCE(beatmaps.audio_file, excluded.audio_file),
+            background_file=COALESCE(beatmaps.background_file, excluded.background_file),
+            bpm_min=COALESCE(beatmaps.bpm_min, excluded.bpm_min),
+            bpm_max=COALESCE(beatmaps.bpm_max, excluded.bpm_max)
     ''', beatmap_tuples)
     
     conn.commit()
     logging.info(f"Database sync complete. Processed {len(beatmap_tuples)} beatmaps. "
-                 f"({cursor.rowcount} new entries added)")
+                 f"({cursor.rowcount} rows affected)")
     conn.close()
 
 def update_beatmap_details(md5_hash, details):
