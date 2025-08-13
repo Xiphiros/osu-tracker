@@ -36,7 +36,7 @@
     width: 120px;
 }
 
-.recommender-controls button {
+.recommender-controls button#find-map-button {
     background-color: var(--accent-color);
     color: white;
     border: none;
@@ -49,14 +49,48 @@
     margin-left: auto; /* Push button to the right */
 }
 
-.recommender-controls button:hover:not(:disabled) {
+.recommender-controls button#find-map-button:hover:not(:disabled) {
     background-color: var(--accent-hover);
 }
 
-.recommender-controls button:disabled {
+.recommender-controls button#find-map-button:disabled {
     background-color: #555;
     cursor: not-allowed;
 }
+
+.mod-selection-container {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-basis: 100%;
+    order: -1;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 5px;
+}
+
+.mod-selection-container .mod-button {
+    background-color: #333;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.mod-selection-container .mod-button:hover {
+    border-color: #888;
+}
+
+.mod-selection-container .mod-button.active {
+    background-color: var(--accent-color);
+    border-color: var(--accent-hover);
+    color: white;
+    font-weight: bold;
+}
+
 
 #recommender-result {
     min-height: 160px;
