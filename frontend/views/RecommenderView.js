@@ -362,20 +362,22 @@ export function createRecommenderView() {
 
         const currentStep = sessionQueue[currentStepIndex];
 		const mods = getIntFromMods(currentStep.mods);
+        const focus = view.querySelector('input[name="skill-focus"]:checked').value;
 		const params = {
-			mods: mods
+			mods,
+            focus
 		};
 
 		suggestSrButton.disabled = true;
 		suggestSrButton.textContent = '...';
-		statusMessage.textContent = 'Analyzing recent plays...';
+		statusMessage.textContent = `Analyzing ${focus}-focused plays...`;
 
 		try {
 			const result = await getSuggestedSr(playerName, params);
 			const suggestedSr = result.suggested_sr;
 			srInput.value = suggestedSr.toFixed(1);
 			localStorage.setItem('recommender_sr', srInput.value);
-			statusMessage.textContent = `Suggestion based on your last ${result.plays_considered} plays: ${suggestedSr.toFixed(2)} ★`;
+			statusMessage.textContent = `Suggestion based on your last ${result.plays_considered} ${focus}-focused plays: ${suggestedSr.toFixed(2)} ★`;
 		} catch (error) {
 			statusMessage.textContent = `Error: ${error.message}`;
 		} finally {
