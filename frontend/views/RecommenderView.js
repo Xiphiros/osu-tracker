@@ -51,7 +51,7 @@ export function createRecommenderView() {
 	const savedSr = localStorage.getItem('recommender_sr') || '5.5';
 	const savedBpm = localStorage.getItem('recommender_bpm') || '200';
 	const savedAcc = localStorage.getItem('goal_accuracy') || '96';
-	const savedMisses = localStorage.getItem('goal_misses') || '5';
+	const savedMisses = localStorage.getItem('goal_misses') || '';
 
 	view.innerHTML = `
         <h2>Training Recommender</h2>
@@ -197,10 +197,11 @@ export function createRecommenderView() {
                 item.classList.add('active-step');
             }
 
-            let goals = `Acc: ${step.goals.acc}% | Misses: ≤${step.goals.misses}`;
-            if (step.goals.useSv2 && step.goals.score) {
-                goals += ` | Score: ≥${parseInt(step.goals.score).toLocaleString()}`;
-            }
+            let goalParts = [];
+            if (step.goals.acc !== null) goalParts.push(`Acc: ${step.goals.acc}%`);
+            if (step.goals.misses !== null) goalParts.push(`Misses: ≤${step.goals.misses}`);
+            if (step.goals.useSv2 && step.goals.score !== null) goalParts.push(`Score: ≥${parseInt(step.goals.score).toLocaleString()}`);
+            const goals = goalParts.join(' | ');
 
             item.innerHTML = `
                 <div class="queue-item-details">
@@ -208,7 +209,7 @@ export function createRecommenderView() {
                         <span class="count">${step.count}x</span>
                         <span class="mods">${step.mods.length > 0 ? step.mods.join('') : 'NM'}</span> maps
                     </div>
-                    <div class="queue-item-goals">${goals}</div>
+                    <div class="queue-item-goals">${goals || 'No specific goals'}</div>
                 </div>
                 <button class="queue-item-remove" data-index="${index}">✖</button>
             `;
@@ -223,7 +224,7 @@ export function createRecommenderView() {
                 renderQueue();
             });
         });
-        startSessionButton.disabled = isSessionActive;
+        startSessionButton.disabled = isSessionActive || sessionQueue.length === 0;
     };
     
     const addStepToQueue = () => {
@@ -233,17 +234,18 @@ export function createRecommenderView() {
             return;
         }
         
-        const acc = parseFloat(view.querySelector('#planner-goal-accuracy').value) || null;
-        const misses = parseInt(view.querySelector('#planner-goal-misses').value, 10);
-        if (acc === null || isNaN(misses)) {
-            statusMessage.textContent = "Accuracy and Max Misses are required for a step.";
-            return;
-        }
-
+        const accInput = view.querySelector('#planner-goal-accuracy');
+        const missesInput = view.querySelector('#planner-goal-misses');
+        const scoreInput = view.querySelector('#planner-goal-score');
         const useSv2 = sv2Toggle.checked;
-        const score = useSv2 ? (parseInt(view.querySelector('#planner-goal-score').value, 10) || null) : null;
-        if (useSv2 && !score) {
-             statusMessage.textContent = "Please enter a score goal when SV2 is enabled.";
+
+        const acc = accInput.value ? parseFloat(accInput.value) : null;
+        const missesValue = missesInput.value ? parseInt(missesInput.value, 10) : null;
+        const misses = (missesValue !== null && !isNaN(missesValue)) ? missesValue : null;
+        const score = useSv2 && scoreInput.value ? parseInt(scoreInput.value, 10) : null;
+
+        if (acc === null && misses === null && score === null) {
+            statusMessage.textContent = "Please define at least one goal (Accuracy, Misses, or Score).";
             return;
         }
 
@@ -490,8 +492,6 @@ export function createRecommenderView() {
 						statusMessage.textContent = 'Scan complete. Checking latest play...';
 						const latestReplay = await getLatestReplay(playerName);
 						if (latestReplay && latestReplay.beatmap_md5 === currentRecommendation.md5_hash) {
-							// Check if played mods are a superset of recommended mods (e.g., recommend HD, play HDHR is ok)
-                            // and core difficulty mods match (e.g. can't recommend NM and pass with DT)
                             const coreRecMods = currentRecommendation.mods & (MODS.Easy | MODS.HardRock | MODS.DoubleTime | MODS.HalfTime);
                             const corePlayMods = latestReplay.mods_used & (MODS.Easy | MODS.HardRock | MODS.DoubleTime | MODS.HalfTime);
 
@@ -499,32 +499,28 @@ export function createRecommenderView() {
                                 const goals = currentRecommendation.goals;
 								const playAcc = calculateAccuracy(latestReplay);
 								const hasV2 = (latestReplay.mods_used & MODS.ScoreV2) > 0;
+								let failReasons = [];
 
-								let goalFailed = false, failReason = '';
-								if (playAcc < goals.acc) {
-									goalFailed = true;
-									failReason = `Accuracy was ${playAcc.toFixed(2)}% (needed ${goals.acc}%)`;
-								} else if (goals.useSv2) {
-                                    if (!goals.score) { /* Should not happen due to form validation */ }
-                                    else if (!hasV2) {
-                                        goalFailed = true;
-                                        failReason = 'Play was not on ScoreV2 (score goal requires V2)';
+                                if (goals.acc !== null && playAcc < goals.acc) {
+                                    failReasons.push(`Accuracy was ${playAcc.toFixed(2)}% (needed ${goals.acc}%)`);
+                                }
+                                if (goals.useSv2 && goals.score !== null) {
+                                    if (!hasV2) {
+                                        failReasons.push('Play was not on ScoreV2 (score goal requires V2)');
                                     } else if (latestReplay.total_score < goals.score) {
-                                        goalFailed = true;
-                                        failReason = `Score was ${latestReplay.total_score.toLocaleString()} (needed ${goals.score.toLocaleString()})`;
+                                        failReasons.push(`Score was ${latestReplay.total_score.toLocaleString()} (needed ${goals.score.toLocaleString()})`);
                                     }
                                 }
+                                if (goals.misses !== null && latestReplay.num_misses > goals.misses) {
+                                    failReasons.push(`Misses were ${latestReplay.num_misses} (max allowed ${goals.misses})`);
+                                }
                                 
-                                if (!goalFailed && latestReplay.num_misses > goals.misses) {
-									goalFailed = true;
-									failReason = `Misses were ${latestReplay.num_misses} (max allowed ${goals.misses})`;
-								}
-
-								const resultMessage = goalFailed ? `Goal Failed: ${failReason}` : 'Goal Passed!';
+                                const goalFailed = failReasons.length > 0;
+								const resultMessage = goalFailed ? `Goal Failed: ${failReasons.join(', ')}` : 'Goal Passed!';
 								detectionResultMessage.textContent = resultMessage;
 								detectedReplayCardContainer.innerHTML = '';
 								detectedReplayCardContainer.appendChild(createReplayCard(latestReplay));
-								nextMapButton.onclick = () => handleSessionProgress(!goalFailed, failReason || resultMessage);
+								nextMapButton.onclick = () => handleSessionProgress(!goalFailed, failReasons.join(', ') || resultMessage);
 								detectionResultContainer.style.display = 'flex';
                                 statusMessage.textContent = `Play detected. Click below to continue.`;
 							} else {
@@ -577,6 +573,7 @@ export function createRecommenderView() {
     addStepButton.addEventListener('click', addStepToQueue);
     startSessionButton.addEventListener('click', startSession);
 
+    // Initial render
     renderQueue();
 	return view;
 }
