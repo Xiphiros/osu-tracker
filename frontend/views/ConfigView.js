@@ -1,6 +1,8 @@
 import { syncBeatmaps, scanReplays, getProgressStatus } from '../services/api.js';
 
 let progressInterval = null;
+let lastSyncStatus = 'idle';
+let lastScanStatus = 'idle';
 
 function stopProgressPolling() {
     if (progressInterval) {
@@ -63,41 +65,57 @@ export function createConfigView() {
     };
 
     const startPolling = () => {
-        stopProgressPolling(); // Ensure no multiple intervals are running
+        stopProgressPolling();
+        lastSyncStatus = 'running'; // Assume it starts running immediately
+        lastScanStatus = 'running';
         
         progressInterval = setInterval(async () => {
             try {
                 const progress = await getProgressStatus();
-                
-                // Update Sync Progress
                 const syncData = progress.sync;
-                syncProgressContainer.style.display = (syncData.status === 'running') ? 'block' : 'none';
+                const scanData = progress.scan;
+
+                // --- Update Sync Progress Bar ---
                 if (syncData.status === 'running') {
+                    syncProgressContainer.style.display = 'block';
                     syncProgressBar.value = syncData.current;
                     syncProgressBar.max = syncData.total || 100;
                     syncProgressText.textContent = `${syncData.message} (${syncData.current} / ${syncData.total || '?'})`;
                 }
+
+                // --- Handle Sync Completion ---
+                if (syncData.status !== 'running' && lastSyncStatus === 'running') {
+                    syncProgressContainer.style.display = 'none';
+                    setStatus(syncData.message, syncData.status === 'complete' ? 'success' : 'error');
+                    if(syncData.status === 'complete') {
+                        view.dispatchEvent(new CustomEvent('datachanged', { bubbles: true }));
+                    }
+                }
                 
-                // Update Scan Progress
-                const scanData = progress.scan;
-                scanProgressContainer.style.display = (scanData.status === 'running') ? 'block' : 'none';
+                // --- Update Scan Progress Bar ---
                 if (scanData.status === 'running') {
+                    scanProgressContainer.style.display = 'block';
                     scanProgressBar.value = scanData.current;
                     scanProgressBar.max = scanData.total || 100;
                     scanProgressText.textContent = `${scanData.message} (${scanData.current} / ${scanData.total || '?'})`;
                 }
 
-                // Check for completion or error
+                // --- Handle Scan Completion ---
+                if (scanData.status !== 'running' && lastScanStatus === 'running') {
+                    scanProgressContainer.style.display = 'none';
+                    setStatus(scanData.message, scanData.status === 'complete' ? 'success' : 'error');
+                    if(scanData.status === 'complete') {
+                        view.dispatchEvent(new CustomEvent('datachanged', { bubbles: true }));
+                    }
+                }
+
+                lastSyncStatus = syncData.status;
+                lastScanStatus = scanData.status;
+
+                // --- Stop Polling if both tasks are idle ---
                 if (syncData.status !== 'running' && scanData.status !== 'running') {
                     stopProgressPolling();
                     setButtonsDisabled(false);
-                    
-                    if (syncData.status === 'complete' || scanData.status === 'complete') {
-                        setStatus(syncData.message || scanData.message, 'success');
-                        view.dispatchEvent(new CustomEvent('datachanged', { bubbles: true }));
-                    } else if (syncData.status === 'error' || scanData.status === 'error') {
-                        setStatus(syncData.message || scanData.message, 'error');
-                    }
                 }
 
             } catch (error) {
@@ -114,6 +132,7 @@ export function createConfigView() {
         syncProgressContainer.style.display = 'block';
         syncProgressBar.value = 0;
         syncProgressText.textContent = 'Starting sync...';
+        lastSyncStatus = 'idle'; // Reset before starting
 
         try {
             await syncBeatmaps();
@@ -130,6 +149,8 @@ export function createConfigView() {
         scanProgressContainer.style.display = 'block';
         scanProgressBar.value = 0;
         scanProgressText.textContent = 'Starting scan...';
+        lastScanStatus = 'idle'; // Reset before starting
+
         try {
             await scanReplays();
             startPolling();
