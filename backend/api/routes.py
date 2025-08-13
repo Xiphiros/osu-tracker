@@ -140,12 +140,30 @@ def suggest_sr(player_name):
 
     # Second, filter by skill focus if specified
     focused_plays = []
-    if focus == 'aim':
-        focused_plays = [p for p in mod_plays if p.get('aim') and p.get('speed') and p['aim'] > p['speed']]
+    if focus == 'jumps':
+        focused_plays = [p for p in mod_plays if p.get('aim') and p.get('speed') and p.get('slider_factor') and p['aim'] > p['speed'] * 1.1 and p['slider_factor'] > 0.95]
+    elif focus == 'flow':
+        focused_plays = []
+        for p in mod_plays:
+            n_sliders = p.get('beatmap', {}).get('num_sliders')
+            n_objects = (p.get('beatmap', {}).get('num_hitcircles', 0) or 0) + (n_sliders or 0) + (p.get('beatmap', {}).get('num_spinners', 0) or 0)
+            if p.get('aim_difficult_slider_count') and n_sliders and n_objects and n_sliders > 0 and n_objects > 0:
+                if (p['aim_difficult_slider_count'] / n_sliders) > 0.5 and n_sliders > (n_objects * 0.2):
+                    focused_plays.append(p)
     elif focus == 'speed':
-        focused_plays = [p for p in mod_plays if p.get('aim') and p.get('speed') and p['speed'] > p['aim']]
-    elif focus == 'technical':
-        focused_plays = [p for p in mod_plays if p.get('slider_factor', 0) > 1.3]
+        focused_plays = []
+        for p in mod_plays:
+            n_objects = (p.get('beatmap', {}).get('num_hitcircles', 0) or 0) + (p.get('beatmap', {}).get('num_sliders', 0) or 0) + (p.get('beatmap', {}).get('num_spinners', 0) or 0)
+            if p.get('aim') and p.get('speed') and p.get('speed_note_count') and n_objects > 0:
+                if p['speed'] > p['aim'] * 1.1 and (p['speed_note_count'] / n_objects) < 0.4:
+                    focused_plays.append(p)
+    elif focus == 'stamina':
+        focused_plays = []
+        for p in mod_plays:
+            n_objects = (p.get('beatmap', {}).get('num_hitcircles', 0) or 0) + (p.get('beatmap', {}).get('num_sliders', 0) or 0) + (p.get('beatmap', {}).get('num_spinners', 0) or 0)
+            if p.get('speed_note_count') and n_objects > 0:
+                 if (p['speed_note_count'] / n_objects) > 0.4:
+                    focused_plays.append(p)
     else: # balanced or no focus
         focused_plays = mod_plays
         
