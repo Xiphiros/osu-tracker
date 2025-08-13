@@ -170,18 +170,38 @@ def serve_index(path):
     return send_from_directory(app.static_folder, 'index.html')
 
 def sync_local_beatmaps():
-    """Parses osu!.db and syncs the data with the local application database."""
+    """Parses osu!.db and associated .osu files to sync the local database."""
     osu_folder = os.getenv('OSU_FOLDER')
     if not osu_folder:
         logging.warning("OSU_FOLDER not set. Cannot sync beatmap database.")
         return
+    
     db_path = os.path.join(osu_folder, 'osu!.db')
     if not os.path.exists(db_path):
         logging.warning(f"osu!.db not found at {db_path}. Cannot sync beatmap database.")
         return
+
+    songs_path = os.path.join(osu_folder, 'Songs')
+    
     logging.info("Parsing beatmap data from osu!.db...")
     beatmap_data = parser.parse_osu_db(db_path)
-    logging.info(f"Found {len(beatmap_data)} beatmaps. Syncing with application database...")
+    logging.info(f"Found {len(beatmap_data)} beatmaps. Parsing .osu files for details...")
+
+    # Iterate through all beatmaps and parse their .osu files for more details
+    for i, (md5, beatmap) in enumerate(beatmap_data.items()):
+        if (i + 1) % 500 == 0:
+            logging.info(f"Parsing progress: {i + 1}/{len(beatmap_data)} beatmaps...")
+            
+        if beatmap.get('folder_name') and beatmap.get('osu_file_name'):
+            osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
+            if os.path.exists(osu_file_path):
+                try:
+                    osu_details = parser.parse_osu_file(osu_file_path)
+                    beatmap.update(osu_details) # Merge details into the main dict
+                except Exception as e:
+                    logging.warning(f"Could not parse .osu file {osu_file_path}: {e}")
+
+    logging.info(f"Finished parsing .osu files. Syncing with application database...")
     database.add_or_update_beatmaps(beatmap_data)
 
 def run_server():
