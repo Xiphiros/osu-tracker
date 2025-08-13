@@ -2,11 +2,10 @@ import { getReplays, scanReplays, getPlayers } from './services/api.js';
 import { createScoresView, loadScores } from './views/ScoresView.js';
 import { createProfileView, loadProfile } from './views/ProfileView.js';
 import { createBeatmapsView, loadBeatmaps } from './views/BeatmapsView.js';
+import { createConfigView } from './views/ConfigView.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const mainContent = document.getElementById('main-content');
-    const scanButton = document.getElementById('scan-button');
-    const statusMessage = document.getElementById('status-message');
     const navLinks = document.querySelectorAll('.nav-link');
     const userSelectorContainer = document.getElementById('user-selector-container');
 
@@ -16,19 +15,13 @@ document.addEventListener('DOMContentLoaded', () => {
         scores: createScoresView(),
         profile: createProfileView(),
         beatmaps: createBeatmapsView(),
+        config: createConfigView(),
     };
     
     // Add all views to the DOM, but keep them hidden initially
     for (const key in views) {
         views[key].dataset.viewName = key;
         mainContent.appendChild(views[key]);
-    }
-
-    function createStubView(title) {
-        const view = document.createElement('div');
-        view.className = 'view';
-        view.innerHTML = `<h2>${title}</h2><p>This section is under construction.</p>`;
-        return view;
     }
 
     async function populatePlayerSelector() {
@@ -39,21 +32,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 selector.id = 'player-selector';
                 selector.innerHTML = `<option value="">-- Select a Player --</option>`;
                 players.forEach(player => {
-                    selector.innerHTML += `<option value="${player}">${player}</option>`;
+                    const isSelected = player === currentPlayer;
+                    selector.innerHTML += `<option value="${player}" ${isSelected ? 'selected' : ''}>${player}</option>`;
                 });
                 userSelectorContainer.innerHTML = '';
                 userSelectorContainer.appendChild(selector);
                 
                 selector.addEventListener('change', (e) => {
                     currentPlayer = e.target.value;
-                    if (currentPlayer) {
-                        switchView('profile'); // Switch to profile view when a player is selected
-                    } else {
-                        switchView('scores'); // Go back to all scores if "Select" is chosen
-                    }
+                    // If a player is selected, switch to their profile. Otherwise, go to scores.
+                    switchView(currentPlayer ? 'profile' : 'scores');
                 });
             } else {
-                userSelectorContainer.innerHTML = '<p style="font-size: 0.8em; color: #aaa; text-align: center;">No players found. Scan for replays.</p>';
+                userSelectorContainer.innerHTML = '<p style="font-size: 0.8em; color: #aaa; text-align: center;">No players found. Please run a scan from the Config page.</p>';
             }
         } catch (error) {
             console.error("Failed to load players:", error);
@@ -70,13 +61,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (view) {
             view.classList.add('active');
-            if (viewName === 'scores') {
-                loadScores(view);
-            } else if (viewName === 'profile') {
-                loadProfile(view, currentPlayer);
-            } else if (viewName === 'beatmaps') {
-                loadBeatmaps(view);
-            }
+            // Load data for the activated view
+            if (viewName === 'scores') loadScores(view);
+            else if (viewName === 'profile') loadProfile(view, currentPlayer);
+            else if (viewName === 'beatmaps') loadBeatmaps(view);
+            // Config view requires no data loading
         }
         if (link) {
             link.classList.add('active');
@@ -89,45 +78,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const viewName = e.target.getAttribute('data-view');
             
             if (viewName === 'profile' && !currentPlayer) {
-                statusMessage.textContent = 'Please select a player from the dropdown first.';
+                // Find the config view's status message to display a prompt.
+                const configStatus = views.config.querySelector('#config-status-message');
+                if(configStatus) {
+                    configStatus.textContent = "Please select a player first, or scan for replays if the list is empty.";
+                    configStatus.style.display = 'block';
+                    configStatus.className = 'info';
+                }
+                switchView('config'); // Redirect to config page to show the message.
                 return;
             }
             switchView(viewName);
         });
     });
 
-    scanButton.addEventListener('click', async () => {
-        statusMessage.textContent = 'Scanning...';
-        scanButton.disabled = true;
-        try {
-            const result = await scanReplays();
-            statusMessage.textContent = result.status || 'Scan complete.';
-            
-            await populatePlayerSelector();
-            
-            const activeView = document.querySelector('#main-content .view.active');
-            if (activeView) {
-                const viewName = activeView.dataset.viewName;
-                if (viewName === 'scores') {
-                    loadScores(views.scores);
-                } else if (viewName === 'profile' && currentPlayer) {
-                    loadProfile(views.profile, currentPlayer);
-                } else if (viewName === 'beatmaps') {
-                    loadBeatmaps(views.beatmaps);
-                }
-            }
-
-        } catch (error) {
-            console.error('Error during scan:', error);
-            statusMessage.textContent = 'Error during scan.';
-        } finally {
-            scanButton.disabled = false;
-        }
+    // Listen for the custom 'datachanged' event from the Config view
+    mainContent.addEventListener('datachanged', () => {
+        console.log('Data changed event received, refreshing player list.');
+        populatePlayerSelector();
     });
 
     async function initializeApp() {
         await populatePlayerSelector();
-        switchView('scores'); // Start on the main scores view
+        // Start on the main scores view if players exist, otherwise on config page
+        const players = await getPlayers();
+        switchView(players.length > 0 ? 'scores' : 'config');
     }
 
     initializeApp();
