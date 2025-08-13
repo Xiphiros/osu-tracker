@@ -21,15 +21,20 @@ function applyFiltersAndRender(viewElement) {
     const sortValue = viewElement.querySelector('#sort-select').value;
     const minAcc = parseFloat(viewElement.querySelector('#acc-filter').value) || 0;
     const minStars = parseFloat(viewElement.querySelector('#stars-filter').value) || 0;
+    const exactMatch = viewElement.querySelector('#exact-mod-match-toggle').checked;
 
     let filteredScores = allScores;
 
     if (activeModFilters.size > 0) {
         filteredScores = filteredScores.filter(replay => {
             const replayMods = new Set(getModsFromInt(replay.mods_used));
+            if (exactMatch) {
+                if (replayMods.size !== activeModFilters.size) return false;
+            }
             return [...activeModFilters].every(mod => replayMods.has(mod));
         });
     }
+
     if (minAcc > 0) {
         filteredScores = filteredScores.filter(replay => calculateAccuracy(replay) >= minAcc);
     }
@@ -73,6 +78,13 @@ export function createProfileView() {
                 </select>
                 <input type="number" id="acc-filter" min="0" max="100" step="0.1" placeholder="Min Accuracy %">
                 <input type="number" id="stars-filter" min="0" step="0.1" placeholder="Min Stars ★">
+                <div class="toggle-switch-container">
+                    <label for="exact-mod-match-toggle" class="toggle-switch-label">Exact Match</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="exact-mod-match-toggle">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
             </div>
         </div>
         <div id="profile-replays-container"></div>
@@ -99,7 +111,7 @@ export async function loadProfile(viewElement, playerName) {
     statusMessage.textContent = `Loading ${playerName}'s profile...`;
     
     if (!viewInitialized) {
-        viewElement.querySelectorAll('#sort-select, #acc-filter, #stars-filter').forEach(el => {
+        viewElement.querySelectorAll('#sort-select, #acc-filter, #stars-filter, #exact-mod-match-toggle').forEach(el => {
             el.addEventListener('input', () => applyFiltersAndRender(viewElement));
         });
         viewInitialized = true;
