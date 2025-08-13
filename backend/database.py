@@ -35,6 +35,9 @@ def init_db():
         if 'stars' not in beatmap_columns:
             logging.info("Applying migration: Adding 'stars' to 'beatmaps' table.")
             cursor.execute("ALTER TABLE beatmaps ADD COLUMN stars REAL")
+        if 'game_mode' not in beatmap_columns:
+            logging.info("Applying migration: Adding 'game_mode' to 'beatmaps' table.")
+            cursor.execute("ALTER TABLE beatmaps ADD COLUMN game_mode INTEGER")
         
         conn.commit()
 
@@ -82,6 +85,7 @@ def init_db():
             folder_name TEXT,
             osu_file_name TEXT,
             grades TEXT,
+            game_mode INTEGER,
             last_played_date TEXT,
             num_hitcircles INTEGER,
             num_sliders INTEGER,
@@ -263,7 +267,7 @@ def add_or_update_beatmaps(beatmaps_data):
         beatmap_tuples.append((
             md5, data.get('artist'), data.get('title'), data.get('creator'), 
             data.get('difficulty'), data.get('folder_name'), data.get('osu_file_name'),
-            json.dumps(data.get('grades', {})), data.get('last_played_date'),
+            json.dumps(data.get('grades', {})), data.get('game_mode'), data.get('last_played_date'),
             data.get('num_hitcircles'), data.get('num_sliders'), data.get('num_spinners'),
             data.get('ar'), data.get('cs'), data.get('hp'), data.get('od'), data.get('stars'),
             data.get('bpm'), data.get('audio_file'), data.get('background_file'), 
@@ -277,10 +281,10 @@ def add_or_update_beatmaps(beatmaps_data):
     cursor.executemany('''
         INSERT INTO beatmaps (
             md5_hash, artist, title, creator, difficulty, folder_name, osu_file_name,
-            grades, last_played_date, num_hitcircles, num_sliders, num_spinners,
+            grades, game_mode, last_played_date, num_hitcircles, num_sliders, num_spinners,
             ar, cs, hp, od, stars, bpm,
             audio_file, background_file, bpm_min, bpm_max
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(md5_hash) DO UPDATE SET
             artist=excluded.artist,
             title=excluded.title,
@@ -289,6 +293,7 @@ def add_or_update_beatmaps(beatmaps_data):
             folder_name=excluded.folder_name,
             osu_file_name=excluded.osu_file_name,
             grades=excluded.grades,
+            game_mode=excluded.game_mode,
             last_played_date=excluded.last_played_date,
             num_hitcircles=excluded.num_hitcircles,
             num_sliders=excluded.num_sliders,
@@ -332,6 +337,34 @@ def update_beatmap_details(md5_hash, details):
     conn.commit()
     conn.close()
     
+def get_recommendation(target_sr, max_bpm):
+    """
+    Finds a single, random osu! standard beatmap matching the criteria.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    query = """
+        SELECT * FROM beatmaps 
+        WHERE 
+            game_mode = 0 
+            AND stars >= ? 
+            AND stars < ? 
+            AND bpm <= ?
+        ORDER BY RANDOM() 
+        LIMIT 1
+    """
+    
+    sr_upper_bound = target_sr + 0.1
+    cursor.execute(query, (target_sr, sr_upper_bound, max_bpm))
+    
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        return dict(row)
+    return None
+
 def update_replay_pp(replay_md5, pp, stars, map_max_combo):
     """Updates the pp, stars, and map_max_combo for an existing replay record."""
     conn = get_db_connection()
