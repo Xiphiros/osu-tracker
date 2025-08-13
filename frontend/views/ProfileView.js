@@ -60,7 +60,7 @@ function applyFiltersAndRender(viewElement) {
         
         analyticsContainer.innerHTML = `
             <div class="stat-item">
-                <span class="stat-label">Avg. SR of Top ${scoresForAnalytics.length} (by SR)</span>
+                <span class="stat-label">Average Star Rating (Top ${scoresForAnalytics.length} Plays)</span>
                 <span class="stat-value">★ ${avgStars}</span>
             </div>
         `;
