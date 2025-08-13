@@ -8,7 +8,7 @@ import signal
 import concurrent.futures
 from flask import Flask, jsonify, send_from_directory, request
 from flask_cors import CORS
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key
 
 import database
 import parser
@@ -24,7 +24,20 @@ logging.basicConfig(
 )
 
 # Load environment variables from .env file.
-load_dotenv()
+# Find the .env file, whether bundled or in dev.
+if IS_BUNDLED:
+    env_path = os.path.join(os.path.dirname(sys.executable), '.env')
+else:
+    env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+
+if os.path.exists(env_path):
+    load_dotenv(dotenv_path=env_path)
+else:
+    # Create a dummy .env if it doesn't exist
+    with open(env_path, 'w') as f:
+        f.write("# .env file created by osu! Tracker\n")
+    load_dotenv(dotenv_path=env_path)
+
 
 # Set up static folder path.
 if IS_BUNDLED:
@@ -156,8 +169,6 @@ def get_players():
 
 @app.route('/api/players/<player_name>/stats', methods=['GET'])
 def get_player_stats(player_name):
-    # Note: This still fetches all replays for stat calculation, which is correct.
-    # We only paginate the display lists.
     replays = database.get_all_replays(player_name=player_name, limit=100000)['replays']
     if not replays:
         return jsonify({"total_pp": 0, "play_count": 0, "top_play_pp": 0})
@@ -186,7 +197,6 @@ def _calculate_accuracy(replay):
 
 @app.route('/api/players/<player_name>/suggest-sr', methods=['GET'])
 def suggest_sr(player_name):
-    """Suggests a starting SR based on historical plays and goal criteria."""
     mods = request.args.get('mods', 0, type=int)
     min_acc = request.args.get('min_acc', type=float)
     min_score = request.args.get('min_score', type=int)
@@ -196,14 +206,12 @@ def suggest_sr(player_name):
     
     valid_plays = []
     SCORE_V2_MOD = 536870912
-    # Mask for all mods that fundamentally alter gameplay difficulty
     CORE_MOD_MASK = 2 | 8 | 16 | 64 | 256 | 1024 # EZ, HD, HR, DT, HT, FL
 
     for r in replays:
         if r.get('stars') is None or r.get('game_mode') != 0:
             continue
             
-        # Exact match for core difficulty mods, ignoring others like NF or V2
         replay_core_mods = r.get('mods_used', 0) & CORE_MOD_MASK
         request_core_mods = mods & CORE_MOD_MASK
         if replay_core_mods != request_core_mods:
@@ -238,7 +246,6 @@ def suggest_sr(player_name):
 
 @app.route('/api/recommend', methods=['GET'])
 def get_recommendation():
-    """API endpoint to recommend a beatmap based on SR and BPM."""
     try:
         target_sr = request.args.get('sr', type=float)
         max_bpm = request.args.get('bpm', type=int)
@@ -268,9 +275,40 @@ def serve_song_file(file_path):
     songs_dir = os.path.join(osu_folder, 'Songs')
     return send_from_directory(songs_dir, file_path)
 
+@app.route('/api/config', methods=['GET'])
+def get_config():
+    """Gets current configuration from .env file."""
+    config = {
+        "osu_folder": os.getenv("OSU_FOLDER", ""),
+        "default_player": os.getenv("DEFAULT_PLAYER", "")
+    }
+    return jsonify(config)
+
+@app.route('/api/config', methods=['POST'])
+def save_config():
+    """Saves configuration to the .env file."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid request body"}), 400
+
+    try:
+        # The env_path is already determined globally when the app starts
+        if 'osu_folder' in data:
+            set_key(env_path, "OSU_FOLDER", data['osu_folder'])
+        if 'default_player' in data:
+            set_key(env_path, "DEFAULT_PLAYER", data['default_player'])
+        
+        # Reload the environment variables for the current process
+        load_dotenv(dotenv_path=env_path, override=True)
+
+        return jsonify({"message": "Configuration saved successfully."}), 200
+    except Exception as e:
+        logging.error(f"Failed to save configuration: {e}", exc_info=True)
+        return jsonify({"error": "Failed to write to .env file."}), 500
+
+
 @app.route('/api/scan', methods=['POST'])
 def scan_replays_folder_endpoint():
-    """Starts the replay scanning process in a background thread."""
     if TASK_PROGRESS['scan']['status'] == 'running':
         return jsonify({"error": "Scan already in progress."}), 409
     
@@ -281,7 +319,6 @@ def scan_replays_folder_endpoint():
 
 @app.route('/api/sync-beatmaps', methods=['POST'])
 def sync_beatmaps_endpoint():
-    """Starts the beatmap sync process in a background thread."""
     if TASK_PROGRESS['sync']['status'] == 'running':
         return jsonify({"error": "Sync already in progress."}), 409
 
@@ -292,7 +329,6 @@ def sync_beatmaps_endpoint():
 
 @app.route('/api/progress-status', methods=['GET'])
 def get_progress_status():
-    """Endpoint for the frontend to poll for task progress."""
     return jsonify(TASK_PROGRESS)
               
 @app.route('/', defaults={'path': ''})
@@ -303,20 +339,16 @@ def serve_index(path):
     return send_from_directory(app.static_folder, 'index.html')
 
 def process_osu_file_and_cache(osu_file_path, base_bpm, md5):
-    """Helper to process a .osu file and calculate difficulties for caching."""
     try:
         details = parser.parse_osu_file(osu_file_path)
-        if details.get('bpm'): # Prefer .osu file BPM if available
+        if details.get('bpm'):
             base_bpm = details['bpm']
 
         rosu_map = rosu_pp_py.Beatmap(path=osu_file_path)
         
-        # Calculate NoMod difficulty
         nomod_diff_attrs = rosu_pp_py.Difficulty().calculate(rosu_map)
         details['stars'] = nomod_diff_attrs.stars
         
-        # Calculate difficulties for cacheable mods
-        # Mods that change SR/BPM: EZ (2), HR (16), DT (64), HT (256)
         mods_to_cache = [2, 16, 64, 256]
         mod_cache_results = []
 
@@ -344,7 +376,6 @@ def process_osu_file_and_cache(osu_file_path, base_bpm, md5):
         return md5, {}, []
 
 def sync_local_beatmaps_task():
-    """Task to parse osu!.db, .osu files, and cache difficulties."""
     progress = TASK_PROGRESS['sync']
     progress['status'] = 'running'
     progress['current'] = 0
@@ -408,7 +439,6 @@ def sync_local_beatmaps_task():
         progress['message'] = str(e)
 
 def scan_replays_task():
-    """Task to scan replay files, updating global progress."""
     progress = TASK_PROGRESS['scan']
     progress['status'] = 'running'
     progress['current'] = 0
@@ -461,7 +491,6 @@ def scan_replays_task():
 
 
 def run_server():
-    """Runs the Flask server in a dedicated thread."""
     if IS_BUNDLED:
         from waitress import serve
         serve(app, host="127.0.0.1", port=5000)
@@ -485,16 +514,9 @@ if __name__ == '__main__':
     )
 
     def on_closing():
-        """
-        Called when the pywebview window is closing. This function shuts down
-        the Flask server gracefully when running in a development environment.
-        """
         logging.info("Webview window is closing. Shutting down application.")
-        # For the development server, send SIGINT to the process, like Ctrl+C.
-        # This allows Werkzeug to shut down cleanly.
         if not IS_BUNDLED:
             os.kill(os.getpid(), signal.SIGINT)
-        # For the bundled app, the daemon thread is terminated automatically.
 
     window.events.closing += on_closing
 
