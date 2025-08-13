@@ -26,63 +26,27 @@ function groupScoresByDay(scores) {
     return grouped;
 }
 
-function renderProfileChart(chartConfig) {
+/**
+ * Renders or updates the profile chart.
+ * @param {object | null} chartJsConfig - The complete Chart.js configuration object, or null to hide the chart.
+ */
+function renderProfileChart(chartJsConfig) {
     const chartWrapper = document.getElementById('chart-wrapper');
     if (!chartWrapper) return;
     
-    if (profileChart) profileChart.destroy();
+    if (profileChart) {
+        profileChart.destroy();
+        profileChart = null;
+    }
     
-    if (!chartConfig || chartConfig.data.length === 0) {
+    if (!chartJsConfig || (chartJsConfig.data.datasets[0] && chartJsConfig.data.datasets[0].data.length === 0)) {
         chartWrapper.style.display = 'none';
         return;
     }
     chartWrapper.style.display = 'block';
 
-    const { labels, data, type, yLabel } = chartConfig;
     const ctx = document.getElementById('profile-chart').getContext('2d');
-    
-    profileChart = new Chart(ctx, {
-        type: type,
-        data: {
-            datasets: [{
-                label: yLabel,
-                data: labels.map((label, index) => ({ x: label, y: data[index] })),
-                backgroundColor: 'rgba(0, 170, 255, 0.8)',
-                borderColor: 'rgba(0, 170, 255, 0.5)',
-                borderWidth: 2,
-                pointRadius: 3,
-                tension: (type === 'line') ? 0.1 : 0,
-                stepped: chartConfig.stepped || false,
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    type: 'time',
-                    time: { unit: 'month', tooltipFormat: 'MMM d, yyyy', displayFormats: { month: 'MMM yyyy' } },
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                    ticks: { color: '#ccc' }
-                },
-                y: {
-                    beginAtZero: false,
-                    title: { display: true, text: yLabel, color: '#ccc' },
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                    ticks: { color: '#ccc' }
-                }
-            },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        title: context => new Date(context[0].parsed.x).toLocaleDateString(),
-                        label: context => `${yLabel}: ${context.parsed.y.toFixed(2)}`
-                    }
-                }
-            }
-        }
-    });
+    profileChart = new Chart(ctx, chartJsConfig);
 }
 
 function applyFiltersAndRender(viewElement) {
@@ -123,14 +87,27 @@ function applyFiltersAndRender(viewElement) {
         const scoresForAnalytics = [...filteredScores].sort((a, b) => (b.stars || 0) - (a.stars || 0)).slice(0, 100);
         const totalStars = scoresForAnalytics.reduce((sum, score) => sum + (score.stars || 0), 0);
         const avgStars = scoresForAnalytics.length > 0 ? (totalStars / scoresForAnalytics.length).toFixed(2) : '0.00';
-        analyticsContainer.innerHTML = `<div class="stat-item"><span class="stat-label">Average Star Rating (Top ${scoresForAnalytics.length} Plays)</span><span class="stat-value">★ ${avgStars}</span></div>`;
+        analyticsContainer.innerHTML = `<div class="stat-item"><span class="stat-label">Average Star Rating (Top ${scoresForAnalytics.length} Filtered Plays)</span><span class="stat-value">★ ${avgStars}</span></div>`;
     }
 
     const scoresForChart = [...filteredScores].sort((a, b) => new Date(a.played_at) - new Date(b.played_at));
-    let chartConfig = null;
+    let chartJsConfig = null;
+
+    const baseChartOptions = (yLabel) => ({
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: { type: 'time', time: { unit: 'month', tooltipFormat: 'MMM d, yyyy', displayFormats: { month: 'MMM yyyy' } }, grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: '#ccc' } },
+            y: { beginAtZero: false, title: { display: true, text: yLabel, color: '#ccc' }, grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: '#ccc' } }
+        },
+        plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { title: context => new Date(context[0].parsed.x).toLocaleDateString(), label: context => `${yLabel}: ${context.parsed.y.toFixed(2)}` } }
+        }
+    });
 
     switch (chartType) {
-        case 'total_pp': {
+        case 'pp_progression': {
             let cumulativePlays = [];
             const data = scoresForChart.map(score => {
                 cumulativePlays.push(score);
@@ -138,47 +115,120 @@ function applyFiltersAndRender(viewElement) {
                 const totalPp = ppPlays.reduce((sum, p, i) => sum + p.pp * (0.95 ** i), 0);
                 return { x: new Date(score.played_at), y: totalPp };
             });
-            chartConfig = { labels: data.map(p => p.x), data: data.map(p => p.y), type: 'line', yLabel: 'Total PP (Filtered)', stepped: false };
+            chartJsConfig = {
+                type: 'line',
+                data: { datasets: [{ label: 'Total PP (Filtered)', data, backgroundColor: 'rgba(0, 170, 255, 0.8)', borderColor: 'rgba(0, 170, 255, 0.5)', borderWidth: 2, pointRadius: 2, tension: 0.1 }] },
+                options: baseChartOptions('Total PP (Filtered)')
+            };
             break;
         }
         case 'top_play_pp': {
             let maxPp = 0;
             const data = scoresForChart.map(score => { maxPp = Math.max(maxPp, score.pp || 0); return { x: new Date(score.played_at), y: maxPp }; });
-            chartConfig = { labels: data.map(p => p.x), data: data.map(p => p.y), type: 'line', yLabel: 'Top Play (PP)', stepped: true };
+            chartJsConfig = {
+                type: 'line',
+                data: { datasets: [{ label: 'Top Play (PP)', data, stepped: true, backgroundColor: 'rgba(0, 170, 255, 0.8)', borderColor: 'rgba(0, 170, 255, 0.5)', borderWidth: 2, pointRadius: 2 }] },
+                options: baseChartOptions('Top Play (PP)')
+            };
             break;
         }
         case 'daily_avg_pp': {
             const grouped = groupScoresByDay(scoresForChart);
             const data = Object.keys(grouped).map(date => { const dayScores = grouped[date]; const total = dayScores.reduce((sum, s) => sum + (s.pp || 0), 0); return { x: date, y: total / dayScores.length }; });
-            chartConfig = { labels: data.map(p => p.x), data: data.map(p => p.y), type: 'bar', yLabel: 'Daily Avg PP' };
+            chartJsConfig = {
+                type: 'bar',
+                data: { datasets: [{ label: 'Daily Avg PP', data, backgroundColor: 'rgba(0, 170, 255, 0.8)' }] },
+                options: baseChartOptions('Daily Avg PP')
+            };
             break;
         }
         case 'highest_sr': {
             let maxSr = 0;
             const data = scoresForChart.map(score => { maxSr = Math.max(maxSr, score.stars || 0); return { x: new Date(score.played_at), y: maxSr }; });
-            chartConfig = { labels: data.map(p => p.x), data: data.map(p => p.y), type: 'line', yLabel: 'Highest SR Passed', stepped: true };
+            chartJsConfig = {
+                type: 'line',
+                data: { datasets: [{ label: 'Highest SR Passed', data, stepped: true, backgroundColor: 'rgba(0, 170, 255, 0.8)', borderColor: 'rgba(0, 170, 255, 0.5)', borderWidth: 2, pointRadius: 2 }] },
+                options: baseChartOptions('Highest SR Passed')
+            };
             break;
         }
         case 'daily_avg_sr': {
             const grouped = groupScoresByDay(scoresForChart);
             const data = Object.keys(grouped).map(date => { const dayScores = grouped[date]; const total = dayScores.reduce((sum, s) => sum + (s.stars || 0), 0); return { x: date, y: total / dayScores.length }; });
-            chartConfig = { labels: data.map(p => p.x), data: data.map(p => p.y), type: 'bar', yLabel: 'Daily Avg SR' };
+            chartJsConfig = {
+                type: 'bar',
+                data: { datasets: [{ label: 'Daily Avg SR', data, backgroundColor: 'rgba(0, 170, 255, 0.8)' }] },
+                options: baseChartOptions('Daily Avg SR')
+            };
             break;
         }
         case 'daily_avg_acc': {
             const grouped = groupScoresByDay(scoresForChart);
             const data = Object.keys(grouped).map(date => { const dayScores = grouped[date]; const total = dayScores.reduce((sum, s) => sum + calculateAccuracy(s), 0); return { x: date, y: total / dayScores.length }; });
-            chartConfig = { labels: data.map(p => p.x), data: data.map(p => p.y), type: 'bar', yLabel: 'Daily Avg Accuracy (%)' };
+            chartJsConfig = {
+                type: 'bar',
+                data: { datasets: [{ label: 'Daily Avg Accuracy (%)', data, backgroundColor: 'rgba(0, 170, 255, 0.8)' }] },
+                options: baseChartOptions('Daily Avg Accuracy (%)')
+            };
             break;
         }
         case 'play_count': {
             const grouped = groupScoresByDay(scoresForChart);
             const data = Object.keys(grouped).map(date => ({ x: date, y: grouped[date].length }));
-            chartConfig = { labels: data.map(p => p.x), data: data.map(p => p.y), type: 'bar', yLabel: 'Daily Play Count' };
+            chartJsConfig = {
+                type: 'bar',
+                data: { datasets: [{ label: 'Daily Play Count', data, backgroundColor: 'rgba(0, 170, 255, 0.8)' }] },
+                options: baseChartOptions('Daily Play Count')
+            };
+            break;
+        }
+        case 'cumulative_plays': {
+            const data = scoresForChart.map((score, index) => ({ x: new Date(score.played_at), y: index + 1 }));
+            chartJsConfig = {
+                type: 'line',
+                data: { datasets: [{ label: 'Cumulative Play Count', data, backgroundColor: 'rgba(0, 170, 255, 0.8)', borderColor: 'rgba(0, 170, 255, 0.5)', borderWidth: 2, pointRadius: 0, tension: 0.1 }] },
+                options: baseChartOptions('Cumulative Play Count')
+            };
+            break;
+        }
+        case 'pp_vs_acc': {
+            const data = filteredScores.filter(s => s.pp).map(s => ({ x: calculateAccuracy(s), y: s.pp }));
+            chartJsConfig = {
+                type: 'scatter',
+                data: { datasets: [{ label: 'PP vs Accuracy', data, backgroundColor: 'rgba(0, 170, 255, 0.7)' }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: { type: 'linear', position: 'bottom', title: { display: true, text: 'Accuracy (%)', color: '#ccc' }, grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: '#ccc' } },
+                        y: { title: { display: true, text: 'PP', color: '#ccc' }, grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: '#ccc' } }
+                    },
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => `PP: ${context.parsed.y.toFixed(2)}, Acc: ${context.parsed.x.toFixed(2)}%` } } }
+                }
+            };
+            break;
+        }
+        case 'sr_distribution': {
+            const starCounts = {};
+            filteredScores.forEach(s => { if (!s.stars) return; const bucket = (Math.floor(s.stars * 2) / 2).toFixed(1); starCounts[bucket] = (starCounts[bucket] || 0) + 1; });
+            const sortedBuckets = Object.keys(starCounts).sort((a,b) => parseFloat(a) - parseFloat(b));
+            const labels = sortedBuckets.map(b => `${b} - ${(parseFloat(b) + 0.49).toFixed(1)} ★`);
+            const data = sortedBuckets.map(b => starCounts[b]);
+            chartJsConfig = {
+                type: 'bar',
+                data: { labels, datasets: [{ label: 'Play Count', data, backgroundColor: 'rgba(0, 170, 255, 0.8)' }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Star Rating', color: '#ccc' }, grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: '#ccc' } },
+                        y: { title: { display: true, text: 'Play Count', color: '#ccc' }, grid: { color: 'rgba(255, 255, 255, 0.1)' }, ticks: { color: '#ccc' }, beginAtZero: true }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            };
             break;
         }
     }
-    renderProfileChart(chartConfig);
+    renderProfileChart(chartJsConfig);
     
     filteredScores.sort((a, b) => {
         switch (sortValue) {
@@ -229,18 +279,21 @@ export function createProfileView() {
         <div id="chart-section">
             <div class="chart-controls">
                 <select id="chart-type-select">
-                    <optgroup label="Performance">
-                        <option value="total_pp">Total PP (Filtered)</option>
+                    <optgroup label="Progression Over Time">
+                        <option value="pp_progression">PP Progression (Filtered)</option>
                         <option value="top_play_pp">Top Play PP</option>
-                        <option value="daily_avg_pp">Daily Average PP</option>
-                    </optgroup>
-                    <optgroup label="Skill & Difficulty">
                         <option value="highest_sr">Highest SR Passed</option>
+                        <option value="cumulative_plays">Cumulative Play Count</option>
+                    </optgroup>
+                    <optgroup label="Daily Averages &amp; Activity">
+                        <option value="daily_avg_pp">Daily Average PP</option>
                         <option value="daily_avg_sr">Daily Average SR</option>
                         <option value="daily_avg_acc">Daily Average Accuracy</option>
-                    </optgroup>
-                    <optgroup label="Activity">
                         <option value="play_count">Daily Play Count</option>
+                    </optgroup>
+                    <optgroup label="Score Distributions">
+                        <option value="pp_vs_acc">PP vs. Accuracy Scatter</option>
+                        <option value="sr_distribution">Play Count by Star Rating</option>
                     </optgroup>
                 </select>
             </div>
