@@ -93,9 +93,6 @@ main#main-content {
 .view {
     display: none;
 }
-.view.active {
-    display: block;
-}
 
 /* Player Selector in Sidebar */
 #user-selector-container {
