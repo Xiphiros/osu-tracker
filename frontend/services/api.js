@@ -41,3 +41,11 @@ export const getSongFileUrl = (folderName, fileName) => {
     if (!folderName || !fileName) return '';
     return `${API_BASE_URL}/songs/${encodeURIComponent(folderName)}/${encodeURIComponent(fileName)}`;
 };
+
+export const getBeatmaps = async () => {
+    const response = await fetch(`${API_BASE_URL}/beatmaps`);
+    if (!response.ok) {
+        throw new Error('Failed to fetch beatmaps.');
+    }
+    return response.json();
+};
