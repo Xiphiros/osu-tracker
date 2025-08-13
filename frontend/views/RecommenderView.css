@@ -10,16 +10,16 @@
     border-radius: 8px;
     padding: 20px;
     display: flex;
-    flex-wrap: wrap;
-    gap: 15px;
-    align-items: flex-end; /* Align items to the bottom */
-    justify-content: space-between;
+    flex-direction: column;
+    gap: 20px;
 }
 
-.recommender-inputs-wrapper {
+.recommender-actions-wrapper {
     display: flex;
     gap: 15px;
-    align-items: flex-end; /* This is key to align SR group, BPM group and find button */
+    align-items: flex-end;
+    flex-wrap: wrap;
+    width: 100%;
 }
 
 .control-group {
@@ -92,7 +92,7 @@
     font-size: 1em;
     font-weight: 500;
     transition: background-color 0.2s;
-    /* margin-left: auto; No longer needed with space-between */
+    margin-left: auto;
 }
 
 .recommender-controls button#find-map-button:hover:not(:disabled) {
