@@ -95,13 +95,20 @@ export const getRecommendation = async (sr, bpm, mods = 0, exclude = []) => {
 };
 
 export const getSuggestedSr = async (playerName, params) => {
-    const url = new URL(`${API_BASE_URL}/players/${encodeURIComponent(playerName)}/suggest-sr`);
+    let url = `${API_BASE_URL}/players/${encodeURIComponent(playerName)}/suggest-sr`;
+    const searchParams = new URLSearchParams();
+
     // Filter out null/undefined/empty params before appending
     Object.keys(params).forEach(key => {
         if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
-            url.searchParams.append(key, params[key]);
+            searchParams.append(key, params[key]);
         }
     });
+
+    const queryString = searchParams.toString();
+    if (queryString) {
+        url += `?${queryString}`;
+    }
 
     const response = await fetch(url);
     if (response.status === 404) {
@@ -109,7 +116,8 @@ export const getSuggestedSr = async (playerName, params) => {
         throw new Error(data.message || 'No matching plays found.');
     }
     if (!response.ok) {
-        throw new Error('Failed to fetch SR suggestion.');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch SR suggestion.');
     }
     return response.json();
 };
