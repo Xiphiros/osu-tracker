@@ -36,6 +36,13 @@
     width: 120px;
 }
 
+.control-group .bpm-helper-text {
+    font-size: 0.8em;
+    color: #aaa;
+    min-height: 1.2em; /* Prevent layout shift */
+    margin-top: 4px;
+}
+
 .recommender-controls button#find-map-button {
     background-color: var(--accent-color);
     color: white;
