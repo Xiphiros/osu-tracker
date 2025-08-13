@@ -260,6 +260,32 @@ def add_or_update_beatmaps(beatmaps_data):
     logging.info(f"Database sync complete. Processed {len(beatmap_tuples)} beatmaps. "
                  f"({cursor.rowcount} new entries added)")
     conn.close()
+
+def update_beatmap_details(md5_hash, details):
+    """Updates a beatmap record with details parsed from the .osu file."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Only update if the details are not already present, to avoid unnecessary writes.
+    cursor.execute('''
+        UPDATE beatmaps 
+        SET 
+            audio_file = COALESCE(audio_file, ?),
+            background_file = COALESCE(background_file, ?),
+            bpm_min = COALESCE(bpm_min, ?),
+            bpm_max = COALESCE(bpm_max, ?)
+        WHERE md5_hash = ?
+    ''', (
+        details.get('audio_file'),
+        details.get('background_file'),
+        details.get('bpm_min'),
+        details.get('bpm_max'),
+        md5_hash
+    ))
+    
+    conn.commit()
+    conn.close()
+    
 def update_replay_pp(replay_md5, pp, stars, map_max_combo):
     """Updates the pp, stars, and map_max_combo for an existing replay record."""
     conn = get_db_connection()
