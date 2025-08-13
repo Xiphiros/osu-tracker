@@ -1,6 +1,9 @@
 import sqlite3
 import logging
 import json
+import os
+from dotenv import load_dotenv
+import rosu_pp_py
 
 DATABASE_FILE = 'osu_tracker.db'
 
@@ -337,51 +340,112 @@ def update_beatmap_details(md5_hash, details):
     conn.commit()
     conn.close()
     
-def get_recommendation(target_sr, max_bpm):
+def get_recommendation(target_sr, max_bpm, mods):
     """
-    Finds a single, random osu! standard beatmap matching the criteria.
+    Finds a single, random osu! standard beatmap matching the criteria,
+    calculating difficulty with mods on the fly.
     """
+    load_dotenv()
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    sr_upper_bound = target_sr + 0.1
-    params = (target_sr, sr_upper_bound, max_bpm)
-    
-    logging.debug(f"Searching for recommendation with params: sr >= {params[0]}, sr < {params[1]}, bpm <= {params[2]}")
 
-    # Debugging query to count potential matches
-    count_query = """
-        SELECT COUNT(*) FROM beatmaps 
-        WHERE 
-            game_mode = 0 
-            AND stars IS NOT NULL AND stars >= ? AND stars < ? 
-            AND bpm IS NOT NULL AND bpm <= ?
-    """
-    cursor.execute(count_query, params)
-    match_count = cursor.fetchone()[0]
-    logging.debug(f"Found {match_count} potential maps matching criteria.")
+    # Mod constants for bitwise checks
+    mods_dt = (mods & 64) > 0
+    mods_hr = (mods & 16) > 0
+    mods_ez = (mods & 2) > 0
 
-    if match_count == 0:
-        conn.close()
+    base_query = "SELECT * FROM beatmaps WHERE game_mode = 0 AND stars IS NOT NULL AND bpm IS NOT NULL"
+    params = []
+
+    # Heuristics: Adjust SQL query to find a good pool of candidates.
+    # This pre-filters the beatmaps so we don't have to run rosu-pp on the entire database.
+    if mods_dt:
+        # For DT, we need maps with lower BPM and SR.
+        # map_bpm * 1.5 <= max_bpm  ->  map_bpm <= max_bpm / 1.5
+        base_query += " AND bpm <= ?"
+        params.append(max_bpm / 1.5)
+        # Search for maps with a significantly lower SR.
+        base_query += " AND stars BETWEEN ? AND ?"
+        params.extend([target_sr * 0.5, target_sr * 0.8])
+    elif mods_hr:
+        # For HR, we need maps with a somewhat lower SR.
+        base_query += " AND bpm <= ?"
+        params.append(max_bpm)
+        base_query += " AND stars BETWEEN ? AND ?"
+        params.extend([target_sr * 0.7, target_sr * 0.95])
+    elif mods_ez:
+        # For EZ, we need maps with a higher SR.
+        base_query += " AND bpm <= ?"
+        params.append(max_bpm)
+        base_query += " AND stars BETWEEN ? AND ?"
+        params.extend([target_sr * 1.2, target_sr * 2.5])
+    else:  # NoMod or mods that don't affect star rating (HD, FL).
+        base_query += " AND bpm <= ?"
+        params.append(max_bpm)
+        base_query += " AND stars >= ? AND stars < ?"
+        params.extend([target_sr, target_sr + 0.1])
+
+    base_query += " ORDER BY RANDOM() LIMIT 100"  # Get 100 random candidates to check.
+    
+    logging.debug(f"Recommendation query: {base_query} with params {params}")
+    cursor.execute(base_query, params)
+    candidates = cursor.fetchall()
+    conn.close()
+
+    if not candidates:
+        logging.warning("No initial candidates found from database for recommendation.")
         return None
 
-    # Original query to get a random map
-    query = """
-        SELECT * FROM beatmaps 
-        WHERE 
-            game_mode = 0 
-            AND stars IS NOT NULL AND stars >= ? AND stars < ? 
-            AND bpm IS NOT NULL AND bpm <= ?
-        ORDER BY RANDOM() 
-        LIMIT 1
-    """
+    osu_folder = os.getenv('OSU_FOLDER')
+    if not osu_folder:
+        logging.error("OSU_FOLDER not set, cannot find .osu files for recommendation.")
+        return None
+    songs_path = os.path.join(osu_folder, 'Songs')
     
-    cursor.execute(query, params)
-    row = cursor.fetchone()
-    conn.close()
-    
-    if row:
-        return dict(row)
+    sr_upper_bound = target_sr + 0.1
+
+    for row in candidates:
+        beatmap = dict(row)
+        if not beatmap.get('folder_name') or not beatmap.get('osu_file_name'): continue
+        
+        osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
+        if not os.path.exists(osu_file_path): continue
+
+        try:
+            rosu_map = rosu_pp_py.Beatmap(path=osu_file_path)
+            
+            # Calculate modded difficulty attributes
+            diff_calc = rosu_pp_py.Difficulty(mods=mods)
+            diff_attrs = diff_calc.calculate(rosu_map)
+            modded_stars = diff_attrs.stars
+            
+            # Calculate modded BPM
+            clock_rate = rosu_pp_py.BeatmapAttributesBuilder(mods=mods).build().clock_rate
+            modded_bpm = beatmap.get('bpm', 0) * clock_rate
+            
+            logging.debug(f"Checking candidate {beatmap['osu_file_name']}: Modded SR={modded_stars:.2f}, Modded BPM={modded_bpm:.2f}")
+
+            # Check if the map fits the criteria AFTER mods are applied
+            if target_sr <= modded_stars < sr_upper_bound and modded_bpm <= max_bpm:
+                # We found a match! Update the beatmap dict with modded values for the UI.
+                attr_builder = rosu_pp_py.BeatmapAttributesBuilder(map=rosu_map, mods=mods)
+                modded_map_attrs = attr_builder.build()
+
+                beatmap['stars'] = round(modded_stars, 2)
+                beatmap['bpm'] = round(modded_bpm, 2)
+                beatmap['ar'] = round(modded_map_attrs.ar, 2)
+                beatmap['cs'] = round(modded_map_attrs.cs, 2)
+                beatmap['hp'] = round(modded_map_attrs.hp, 2)
+                beatmap['od'] = round(modded_map_attrs.od, 2)
+
+                logging.info(f"Found recommendation: {beatmap['title']} with mods {mods}, final stats: {beatmap['stars']}*, {beatmap['bpm']}BPM")
+                return beatmap
+                
+        except Exception as e:
+            logging.error(f"Could not calculate difficulty for {osu_file_path} with mods {mods}: {e}", exc_info=False)
+            continue
+            
+    logging.warning(f"No map found matching criteria after checking {len(candidates)} candidates.")
     return None
 
 def update_replay_pp(replay_md5, pp, stars, map_max_combo):
