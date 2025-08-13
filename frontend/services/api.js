@@ -86,10 +86,13 @@ export const getBeatmaps = async (page = 1, limit = 50, searchTerm = null) => {
     return response.json();
 };
 
-export const getRecommendation = async (sr, bpm, mods = 0, exclude = []) => {
+export const getRecommendation = async (sr, bpm, mods = 0, exclude = [], focus = null) => {
     let url = `${API_BASE_URL}/recommend?sr=${sr}&bpm=${bpm}&mods=${mods}`;
     if (exclude.length > 0) {
         url += `&exclude=${exclude.join(',')}`;
+    }
+    if (focus) {
+        url += `&focus=${focus}`;
     }
     const response = await fetch(url);
     if (response.status === 404) {
