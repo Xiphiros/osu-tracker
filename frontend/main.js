@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add all views to the DOM, but keep them hidden initially
     for (const key in views) {
         views[key].dataset.viewName = key;
+        views[key].style.display = 'none'; // Explicitly hide all views
         mainContent.appendChild(views[key]);
     }
 
@@ -58,14 +59,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function switchView(viewName) {
         stopAudio(); // Stop any playing music when changing views
         document.getElementById('status-message').textContent = ''; // Clear status message on view switch
-        document.querySelectorAll('#main-content .view').forEach(v => v.classList.remove('active'));
         navLinks.forEach(link => link.classList.remove('active'));
+
+        // Hide all views
+        for (const key in views) {
+            views[key].style.display = 'none';
+        }
 
         const view = views[viewName];
         const link = document.querySelector(`.nav-link[data-view="${viewName}"]`);
         
         if (view) {
-            view.classList.add('active');
+            view.style.display = 'block'; // Show only the target view
             // Load data for the activated view
             if (viewName === 'scores') loadScores(view);
             else if (viewName === 'profile') loadProfile(view, currentPlayer);
