@@ -1,5 +1,6 @@
 import { getBeatmaps } from '../services/api.js';
 import { createBeatmapCard } from '../components/BeatmapCard.js';
+import { renderPagination } from '../components/Pagination.js';
 
 export function createBeatmapsView() {
     const view = document.createElement('div');
@@ -7,35 +8,40 @@ export function createBeatmapsView() {
     view.className = 'view';
     view.innerHTML = `
         <h2>All Beatmaps</h2>
+        <div id="beatmaps-pagination" class="pagination-controls"></div>
         <div id="beatmaps-container"></div>
     `;
     return view;
 }
 
-export async function loadBeatmaps(viewElement) {
+export async function loadBeatmaps(viewElement, page = 1) {
     const container = viewElement.querySelector('#beatmaps-container');
+    const paginationContainer = viewElement.querySelector('#beatmaps-pagination');
     const statusMessage = document.getElementById('status-message');
     
     statusMessage.textContent = 'Loading beatmap data...';
     container.innerHTML = '';
+    paginationContainer.innerHTML = '';
 
     try {
-        const beatmaps = await getBeatmaps();
-        // Simple sort by artist then title
-        beatmaps.sort((a, b) => {
-            if (a.artist.toLowerCase() < b.artist.toLowerCase()) return -1;
-            if (a.artist.toLowerCase() > b.artist.toLowerCase()) return 1;
-            if (a.title.toLowerCase() < b.title.toLowerCase()) return -1;
-            if (a.title.toLowerCase() > b.title.toLowerCase()) return 1;
-            return 0;
-        });
+        const response = await getBeatmaps(page);
+        const { beatmaps, total } = response;
 
-        statusMessage.textContent = beatmaps.length > 0 ? `Displaying ${beatmaps.length} beatmaps.` : 'No beatmaps found. Try scanning.';
+        const start = Math.min((page - 1) * 50 + 1, total);
+        const end = Math.min(start + beatmaps.length - 1, total);
+
+        statusMessage.textContent = total > 0 ? `Displaying ${start}-${end} of ${total} beatmaps.` : 'No beatmaps found. Try scanning.';
         
         beatmaps.forEach(beatmap => {
             const card = createBeatmapCard(beatmap);
             container.appendChild(card);
         });
+
+        if (total > 0) {
+            renderPagination(paginationContainer, page, total, 50, (newPage) => {
+                loadBeatmaps(viewElement, newPage);
+            });
+        }
 
     } catch (error) {
         console.error('Error fetching beatmap data:', error);
