@@ -19,6 +19,37 @@
     font-size: 0.95em;
 }
 
+.config-action-card .form-group {
+    margin-bottom: 20px;
+}
+
+.config-action-card .form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #ddd;
+}
+
+.config-action-card .form-group input[type="text"],
+.config-action-card .form-group select {
+    width: 100%;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background-color: #333;
+    color: var(--text-color);
+    font-size: 0.9em;
+    box-sizing: border-box;
+}
+
+.config-action-card .form-group small {
+    display: block;
+    margin-top: 8px;
+    font-size: 0.85em;
+    color: #aaa;
+}
+
+
 .config-action-card button {
     background-color: var(--accent-color);
     color: white;
