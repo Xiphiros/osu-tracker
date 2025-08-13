@@ -105,6 +105,27 @@
     font-weight: bold;
 }
 
+.goal-settings-container {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.goal-settings-container h3 {
+    margin: 0 0 5px 0;
+    font-size: 1.2em;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+.goal-inputs {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
 
 #recommender-result {
     min-height: 160px;
