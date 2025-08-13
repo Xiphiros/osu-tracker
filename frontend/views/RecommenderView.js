@@ -100,6 +100,17 @@ export function createRecommenderView() {
         <div id="recommender-active-session" style="display: none;">
             <div id="session-progress-display"></div>
             <div class="recommender-controls">
+                 <div class="skill-focus-container">
+                    <label>Skill Focus:</label>
+                    <div class="radio-group">
+                        <input type="radio" id="focus-balanced" name="skill-focus" value="balanced" checked>
+                        <label for="focus-balanced">Balanced</label>
+                        <input type="radio" id="focus-aim" name="skill-focus" value="aim">
+                        <label for="focus-aim">Aim</label>
+                        <input type="radio" id="focus-speed" name="skill-focus" value="speed">
+                        <label for="focus-speed">Speed</label>
+                    </div>
+                </div>
                 <div class="recommender-actions-wrapper">
                     <div class="control-group">
                         <label for="target-sr">Target Star Rating</label>
@@ -387,11 +398,12 @@ export function createRecommenderView() {
         if (!isSessionActive) return;
         const currentStep = sessionQueue[currentStepIndex];
 
-		const sr = parseFloat(srInput.value),
-			bpm = parseInt(bpmInput.value, 10),
-			mods = getIntFromMods(currentStep.mods);
+		const sr = parseFloat(srInput.value);
+		const bpm = parseInt(bpmInput.value, 10);
+		const mods = getIntFromMods(currentStep.mods);
+        const focus = view.querySelector('input[name="skill-focus"]:checked').value;
 
-		const currentSearchParams = JSON.stringify({ sr, bpm, mods });
+		const currentSearchParams = JSON.stringify({ sr, bpm, mods, focus });
 
 		if (lastSearchParams === currentSearchParams) rerollCount++;
 		else {
@@ -410,11 +422,11 @@ export function createRecommenderView() {
 			return;
 		}
 		findButton.disabled = true;
-		statusMessage.textContent = `Searching...`;
+		statusMessage.textContent = `Searching for a ${focus}-focused map...`;
 		resultContainer.innerHTML = '<p>Searching...</p>';
 		feedbackContainer.style.display = 'none';
 		try {
-			const beatmap = await getRecommendation(sr, bpm, mods, excludedBeatmapIds);
+			const beatmap = await getRecommendation(sr, bpm, mods, excludedBeatmapIds, focus);
 			if (beatmap) {
 				excludedBeatmapIds.push(beatmap.md5_hash);
 				currentRecommendation = {
