@@ -19,7 +19,7 @@
 .recommender-inputs-wrapper {
     display: flex;
     gap: 15px;
-    align-items: flex-start;
+    align-items: flex-end; /* This is key to align SR group, BPM group and find button */
 }
 
 .control-group {
@@ -49,6 +49,38 @@
     min-height: 1.2em; /* Prevent layout shift */
     margin-top: 4px;
 }
+
+.input-with-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.input-with-button input {
+    width: 100px;
+}
+
+.input-with-button .small-button {
+    padding: 6px 12px;
+    font-size: 0.85em;
+    background-color: #444;
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    height: 100%; /* Match input height */
+}
+
+.input-with-button .small-button:hover:not(:disabled) {
+    background-color: #555;
+}
+
+.input-with-button .small-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 
 .recommender-controls button#find-map-button {
     background-color: var(--accent-color);
