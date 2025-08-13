@@ -1,15 +1,12 @@
 import { getSongFileUrl } from '../services/api.js';
 import { getModsFromInt } from '../utils/mods.js';
-
-let currentlyPlaying = { audio: null, button: null };
+import { playAudio } from '../utils/audioPlayer.js';
 
 export function createReplayCard(item) {
     const card = document.createElement('div');
     card.className = 'replay-card';
     const beatmap = item.beatmap || {};
 
-    // Revert to setting the background on the main card element.
-    // The CSS pseudo-element will handle the gradient overlay.
     if (beatmap.folder_name && beatmap.background_file) {
         const imageUrl = getSongFileUrl(beatmap.folder_name, beatmap.background_file);
         card.style.backgroundImage = `url("${CSS.escape(imageUrl)}")`;
@@ -109,33 +106,15 @@ export function createReplayCard(item) {
 
     if (beatmap.folder_name && beatmap.audio_file) {
         const audioUrl = getSongFileUrl(beatmap.folder_name, beatmap.audio_file);
-        const audio = new Audio(audioUrl);
 
         playButton.addEventListener('click', e => {
             e.stopPropagation();
-            if (currentlyPlaying.audio === audio && !audio.paused) {
-                audio.pause();
-            } else {
-                if (currentlyPlaying.audio) {
-                    currentlyPlaying.audio.pause();
-                }
-                audio.currentTime = 0;
-                audio.play();
-            }
+            playAudio(
+                audioUrl,
+                () => { playButton.textContent = '❚❚'; }, // onPlay
+                () => { playButton.textContent = '▶'; }  // onEnd / onPause
+            );
         });
-
-        audio.onplay = () => {
-            if (currentlyPlaying.button) currentlyPlaying.button.textContent = '▶';
-            playButton.textContent = '❚❚';
-            currentlyPlaying = { audio, button: playButton };
-        };
-
-        audio.onpause = audio.onended = () => {
-            playButton.textContent = '▶';
-            if (currentlyPlaying.audio === audio) {
-                currentlyPlaying = { audio: null, button: null };
-            }
-        };
     } else {
         playButton.disabled = true;
     }
