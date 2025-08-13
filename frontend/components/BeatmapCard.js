@@ -7,6 +7,7 @@ export function createBeatmapCard(beatmap) {
     if (beatmap.folder_name && beatmap.background_file) {
         const imageUrl = getSongFileUrl(beatmap.folder_name, beatmap.background_file);
         card.style.backgroundImage = `url("${CSS.escape(imageUrl)}")`;
+        card.classList.add('has-bg');
     }
 
     const mainBpm = beatmap.bpm ? Math.round(beatmap.bpm) : null;
