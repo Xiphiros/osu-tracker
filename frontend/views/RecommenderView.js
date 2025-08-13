@@ -46,7 +46,7 @@ export function createRecommenderView() {
         <h2>Training Recommender</h2>
         <div class="recommender-controls">
             <div class="mod-selection-container"></div>
-            <div class="recommender-inputs-wrapper">
+            <div class="recommender-actions-wrapper">
                 <div class="control-group">
                     <label for="target-sr">Target Star Rating</label>
                     <div class="input-with-button">
@@ -59,8 +59,8 @@ export function createRecommenderView() {
                     <input type="number" id="max-bpm" value="${savedBpm}" step="5" min="60">
                     <span class="bpm-helper-text"></span>
                 </div>
+                <button id="find-map-button">Find a map</button>
             </div>
-            <button id="find-map-button">Find a map</button>
         </div>
         <div class="goal-settings-container">
             <h3>Goal Settings (for automatic detection)</h3>
