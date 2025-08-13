@@ -14,13 +14,14 @@ export function createBeatmapCard(beatmap) {
     const mainBpm = beatmap.bpm ? Math.round(beatmap.bpm) : null;
     const minBpm = beatmap.bpm_min ? Math.round(beatmap.bpm_min) : null;
     const maxBpm = beatmap.bpm_max ? Math.round(beatmap.bpm_max) : null;
+    const starsText = beatmap.stars ? beatmap.stars.toFixed(2) : 'N/A';
 
     let bpmText;
     if (mainBpm) {
         if (minBpm && maxBpm && (maxBpm - minBpm) > 1) {
-            bpmText = `${minBpm}-${maxBpm} (${mainBpm}) BPM`;
+            bpmText = `${minBpm}-${maxBpm} (${mainBpm})`;
         } else {
-            bpmText = `${mainBpm} BPM`;
+            bpmText = `${mainBpm}`;
         }
     } else {
         bpmText = 'N/A';
@@ -40,7 +41,10 @@ export function createBeatmapCard(beatmap) {
                 <div class="stat-item" title="Approach Rate"><span class="label">AR</span><span class="value">${beatmap.ar}</span></div>
                 <div class="stat-item" title="Overall Difficulty"><span class="label">OD</span><span class="value">${beatmap.od}</span></div>
                 <div class="stat-item" title="HP Drain"><span class="label">HP</span><span class="value">${beatmap.hp}</span></div>
-                <div class="stat-item bpm-stat" title="Beats Per Minute"><span class="label">♫</span><span class="value">${bpmText}</span></div>
+                <div class="card-footer-stats">
+                    <div class="stat-item" title="Star Rating"><span class="label">★</span><span class="value">${starsText}</span></div>
+                    <div class="stat-item" title="Beats Per Minute"><span class="label">♫</span><span class="value">${bpmText}</span></div>
+                </div>
             </div>
         </div>
     `;
