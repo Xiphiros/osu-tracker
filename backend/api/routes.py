@@ -123,17 +123,37 @@ def get_player_stats(player_name):
 @api_blueprint.route('/players/<player_name>/suggest-sr', methods=['GET'])
 def suggest_sr(player_name):
     mods = request.args.get('mods', 0, type=int)
+    focus = request.args.get('focus')
+    
     replays = database.get_all_replays(player_name=player_name, limit=100000)['replays']
     CORE_MOD_MASK = 2 | 8 | 16 | 64 | 256 | 1024 # EZ, HD, HR, DT, HT, FL
+    
+    # First, filter by selected mod combination
     mod_plays = []
     for r in replays:
         if r.get('stars') and r.get('game_mode') == 0:
             if (r.get('mods_used', 0) & CORE_MOD_MASK) == (mods & CORE_MOD_MASK):
                 mod_plays.append(r)
+    
     if not mod_plays:
         return jsonify({"message": "No plays found with this mod combination."}), 404
-    recent_plays = mod_plays[:100]
+
+    # Second, filter by skill focus if specified
+    focused_plays = []
+    if focus == 'aim':
+        focused_plays = [p for p in mod_plays if p.get('aim') and p.get('speed') and p['aim'] > p['speed']]
+    elif focus == 'speed':
+        focused_plays = [p for p in mod_plays if p.get('aim') and p.get('speed') and p['speed'] > p['aim']]
+    else: # balanced or no focus
+        focused_plays = mod_plays
+        
+    if not focused_plays:
+        return jsonify({"message": f"No {focus}-focused plays found for this mod combination."}), 404
+        
+    # Take the most recent 100 plays from the filtered list
+    recent_plays = focused_plays[:100]
     average_sr = sum(p['stars'] for p in recent_plays) / len(recent_plays)
+    
     return jsonify({"suggested_sr": average_sr, "plays_considered": len(recent_plays)})
 
 @api_blueprint.route('/recommend', methods=['GET'])
