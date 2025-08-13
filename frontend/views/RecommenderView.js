@@ -18,6 +18,18 @@ import {
 
 let progressInterval = null;
 
+// --- STATE MANAGEMENT ---
+let sessionQueue = [];
+let isSessionActive = false;
+let currentStepIndex = -1;
+let currentStepCompletedCount = 0;
+let plannerActiveMods = new Set();
+let rerollCount = 0;
+let lastSearchParams = null;
+let excludedBeatmapIds = [];
+let currentRecommendation = null;
+const MAX_REROLLS = 3;
+
 function stopProgressPolling() {
 	if (progressInterval) {
 		clearInterval(progressInterval);
@@ -39,50 +51,74 @@ export function createRecommenderView() {
 	const savedSr = localStorage.getItem('recommender_sr') || '5.5';
 	const savedBpm = localStorage.getItem('recommender_bpm') || '200';
 	const savedAcc = localStorage.getItem('goal_accuracy') || '96';
-	const savedScore = localStorage.getItem('goal_score') || '';
-	const savedMisses = localStorage.getItem('goal_misses') || '';
+	const savedMisses = localStorage.getItem('goal_misses') || '5';
 
 	view.innerHTML = `
         <h2>Training Recommender</h2>
-        <div class="recommender-controls">
-            <div class="mod-selection-container"></div>
-            <div class="recommender-actions-wrapper">
-                <div class="control-group">
-                    <label for="target-sr">Target Star Rating</label>
-                    <div class="input-with-button">
-                        <input type="number" id="target-sr" value="${savedSr}" step="0.1" min="1">
-                        <button id="suggest-sr-button" class="small-button" title="Suggest SR based on your goals and play history">Suggest</button>
+
+        <!-- PLANNER VIEW (default) -->
+        <div id="recommender-planner">
+            <div class="session-planner-controls">
+                <h3>Add a Step to Your Plan</h3>
+                <div class="planner-form-grid">
+                    <div class="mod-selection-container"></div>
+                    <div class="control-group">
+                        <label for="planner-step-count">Maps to Pass</label>
+                        <input type="number" id="planner-step-count" min="1" value="5">
                     </div>
-                    <span class="control-group-spacer">&nbsp;</span>
+                    <div class="control-group">
+                        <label for="planner-goal-accuracy">Min Accuracy (%)</label>
+                        <input type="number" id="planner-goal-accuracy" min="0" max="100" step="0.1" placeholder="e.g., 96" value="${savedAcc}">
+                    </div>
+                    <div class="control-group">
+                        <label for="planner-goal-misses">Max Misses</label>
+                        <input type="number" id="planner-goal-misses" min="0" step="1" placeholder="e.g., 5" value="${savedMisses}">
+                    </div>
+                    <div class="control-group" id="planner-goal-score-group" style="display: none;">
+                        <label for="planner-goal-score">Min Score (SV2)</label>
+                        <input type="number" id="planner-goal-score" min="0" step="1000" placeholder="e.g., 500k">
+                    </div>
+                    <div class="toggle-switch-container">
+                        <label for="sv2-goal-toggle" class="toggle-switch-label">ScoreV2 Goal</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="sv2-goal-toggle">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
                 </div>
-                <div class="control-group">
-                    <label for="max-bpm">Target Max BPM</label>
-                    <input type="number" id="max-bpm" value="${savedBpm}" step="5" min="60">
-                    <span class="bpm-helper-text"></span>
-                </div>
-                <button id="find-map-button">Find a map</button>
+                <button id="add-step-button">Add Step to Plan</button>
+            </div>
+
+            <div class="session-plan-display">
+                <h3>Session Plan</h3>
+                <ul id="session-queue-list"></ul>
+                <button id="start-session-button" disabled>Start Session</button>
             </div>
         </div>
-        <div class="goal-settings-container">
-            <h3>Goal Settings (for automatic detection)</h3>
-            <div class="goal-inputs">
-                 <div class="control-group">
-                    <label for="goal-accuracy">Min Accuracy (%)</label>
-                    <input type="number" id="goal-accuracy" min="0" max="100" step="0.1" placeholder="e.g., 96" value="${savedAcc}">
-                </div>
-                <div class="control-group">
-                    <label for="goal-score">Min Score</label>
-                    <input type="number" id="goal-score" min="0" step="1000" placeholder="e.g., 500000" value="${savedScore}">
-                </div>
-                <div class="control-group">
-                    <label for="goal-misses">Max Misses</label>
-                    <input type="number" id="goal-misses" min="0" step="1" placeholder="e.g., 5" value="${savedMisses}">
+
+        <!-- ACTIVE SESSION VIEW (hidden) -->
+        <div id="recommender-active-session" style="display: none;">
+            <div id="session-progress-display"></div>
+            <div class="recommender-controls">
+                <div class="recommender-actions-wrapper">
+                    <div class="control-group">
+                        <label for="target-sr">Target Star Rating</label>
+                        <div class="input-with-button">
+                            <input type="number" id="target-sr" value="${savedSr}" step="0.1" min="1">
+                            <button id="suggest-sr-button" class="small-button" title="Suggest SR based on your goals and play history">Suggest</button>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="max-bpm">Target Max BPM</label>
+                        <input type="number" id="max-bpm" value="${savedBpm}" step="5" min="60">
+                    </div>
+                    <button id="find-map-button">Find a map</button>
                 </div>
             </div>
         </div>
-        <div id="recommender-result">
-            <p>Select your mods, set your target SR and max BPM, then click "Find a map".</p>
-        </div>
+
+        <!-- SHARED ELEMENTS -->
+        <div id="recommender-result"><p>Plan your session, then click "Start Session".</p></div>
         <div id="recommender-feedback" class="recommender-feedback">
             <div class="recommender-feedback-buttons">
                 <button id="passed-button">Passed Goal</button>
@@ -102,24 +138,20 @@ export function createRecommenderView() {
         </div>
     `;
 
+	const trainingMods = ['EZ', 'HD', 'HR', 'DT', 'HT', 'FL'];
+
 	// --- Element Query Selectors ---
 	const findButton = view.querySelector('#find-map-button');
 	const srInput = view.querySelector('#target-sr');
 	const suggestSrButton = view.querySelector('#suggest-sr-button');
 	const bpmInput = view.querySelector('#max-bpm');
-	const bpmHelperText = view.querySelector('.bpm-helper-text');
 	const resultContainer = view.querySelector('#recommender-result');
 	const feedbackContainer = view.querySelector('#recommender-feedback');
-	const manualFeedbackButtons = view.querySelector('.recommender-feedback-buttons');
 	const passedButton = view.querySelector('#passed-button');
 	const failedButton = view.querySelector('#failed-button');
 	const skipButton = view.querySelector('#skip-button');
 	const checkPlayButton = view.querySelector('#check-play-button');
-	const modContainer = view.querySelector('.mod-selection-container');
 	const statusMessage = document.getElementById('status-message');
-	const goalAccInput = view.querySelector('#goal-accuracy');
-	const goalScoreInput = view.querySelector('#goal-score');
-	const goalMissesInput = view.querySelector('#goal-misses');
 	const scanProgressContainer = view.querySelector('#scan-progress-container');
 	const scanProgressBar = view.querySelector('#scan-progress');
 	const scanProgressText = view.querySelector('#scan-progress-text');
@@ -128,14 +160,19 @@ export function createRecommenderView() {
 	const detectedReplayCardContainer = view.querySelector('#detected-replay-card-container');
 	const nextMapButton = view.querySelector('#next-map-button');
 
-	// --- State Variables ---
-	const activeMods = new Set();
-	const trainingMods = ['EZ', 'HD', 'HR', 'DT', 'HT', 'FL'];
-	let rerollCount = 0;
-	let lastSearchParams = null;
-	let excludedBeatmapIds = [];
-	let currentRecommendation = null;
-	const MAX_REROLLS = 3;
+	// Planner UI
+	const plannerView = view.querySelector('#recommender-planner');
+	const plannerModContainer = view.querySelector('.planner-form-grid .mod-selection-container');
+	const addStepButton = view.querySelector('#add-step-button');
+	const sessionQueueList = view.querySelector('#session-queue-list');
+	const startSessionButton = view.querySelector('#start-session-button');
+	const sv2Toggle = view.querySelector('#sv2-goal-toggle');
+	const plannerScoreGroup = view.querySelector('#planner-goal-score-group');
+
+	// Active Session UI
+	const activeSessionView = view.querySelector('#recommender-active-session');
+	const sessionProgressDisplay = view.querySelector('#session-progress-display');
+
 
 	// --- Functions ---
 	const setFeedbackButtonsDisabled = (disabled) => {
@@ -144,26 +181,135 @@ export function createRecommenderView() {
 		skipButton.disabled = disabled;
 		checkPlayButton.disabled = disabled;
 	};
+    
+    const renderQueue = () => {
+        sessionQueueList.innerHTML = '';
+        if (sessionQueue.length === 0) {
+            sessionQueueList.innerHTML = '<p>No steps in your plan yet. Add one above!</p>';
+            startSessionButton.disabled = true;
+            return;
+        }
 
-	const resetSession = () => {
+        sessionQueue.forEach((step, index) => {
+            const item = document.createElement('li');
+            item.className = 'queue-item';
+            if (isSessionActive && index === currentStepIndex) {
+                item.classList.add('active-step');
+            }
+
+            let goals = `Acc: ${step.goals.acc}% | Misses: ≤${step.goals.misses}`;
+            if (step.goals.useSv2 && step.goals.score) {
+                goals += ` | Score: ≥${parseInt(step.goals.score).toLocaleString()}`;
+            }
+
+            item.innerHTML = `
+                <div class="queue-item-details">
+                    <div>
+                        <span class="count">${step.count}x</span>
+                        <span class="mods">${step.mods.length > 0 ? step.mods.join('') : 'NM'}</span> maps
+                    </div>
+                    <div class="queue-item-goals">${goals}</div>
+                </div>
+                <button class="queue-item-remove" data-index="${index}">✖</button>
+            `;
+            sessionQueueList.appendChild(item);
+        });
+
+        sessionQueueList.querySelectorAll('.queue-item-remove').forEach(button => {
+            button.addEventListener('click', (e) => {
+                if (isSessionActive) return;
+                const index = parseInt(e.currentTarget.dataset.index, 10);
+                sessionQueue.splice(index, 1);
+                renderQueue();
+            });
+        });
+        startSessionButton.disabled = isSessionActive;
+    };
+    
+    const addStepToQueue = () => {
+        const count = parseInt(view.querySelector('#planner-step-count').value, 10);
+        if (isNaN(count) || count < 1) {
+            statusMessage.textContent = "Please enter a valid number of maps for the step.";
+            return;
+        }
+        
+        const acc = parseFloat(view.querySelector('#planner-goal-accuracy').value) || null;
+        const misses = parseInt(view.querySelector('#planner-goal-misses').value, 10);
+        if (acc === null || isNaN(misses)) {
+            statusMessage.textContent = "Accuracy and Max Misses are required for a step.";
+            return;
+        }
+
+        const useSv2 = sv2Toggle.checked;
+        const score = useSv2 ? (parseInt(view.querySelector('#planner-goal-score').value, 10) || null) : null;
+        if (useSv2 && !score) {
+             statusMessage.textContent = "Please enter a score goal when SV2 is enabled.";
+            return;
+        }
+
+        sessionQueue.push({
+            count,
+            mods: Array.from(plannerActiveMods),
+            goals: { acc, misses, useSv2, score }
+        });
+        renderQueue();
+    };
+
+    const updateSessionProgressDisplay = () => {
+        if (!isSessionActive) {
+            sessionProgressDisplay.innerHTML = '';
+            return;
+        }
+        const currentStep = sessionQueue[currentStepIndex];
+        const modsText = currentStep.mods.length > 0 ? currentStep.mods.join('') : 'NM';
+        sessionProgressDisplay.innerHTML = `
+            <p id="session-progress-text">
+                Step ${currentStepIndex + 1} of ${sessionQueue.length}: 
+                <strong>(${currentStepCompletedCount}/${currentStep.count})</strong> ${modsText} maps
+            </p>
+            <button id="end-session-button">End Session</button>
+        `;
+        sessionProgressDisplay.querySelector('#end-session-button').addEventListener('click', endSession);
+    };
+
+    const loadStep = (stepIndex) => {
+        currentStepIndex = stepIndex;
+        currentStepCompletedCount = 0;
+        updateSessionProgressDisplay();
+        resetMapFinder();
+        statusMessage.textContent = `New step started! Find a map to begin.`;
+    };
+
+    function startSession() {
+        if (sessionQueue.length === 0) return;
+        isSessionActive = true;
+        plannerView.style.display = 'none';
+        activeSessionView.style.display = 'block';
+        loadStep(0);
+    }
+    
+    function endSession() {
+        isSessionActive = false;
+        currentStepIndex = -1;
+        currentStepCompletedCount = 0;
+        sessionQueue = [];
+        plannerView.style.display = 'block';
+        activeSessionView.style.display = 'none';
+        resultContainer.innerHTML = '<p>Session ended. Plan a new session to begin.</p>';
+        feedbackContainer.style.display = 'none';
+        renderQueue();
+        statusMessage.textContent = "Session ended.";
+    }
+
+	const resetMapFinder = () => {
 		rerollCount = 0;
 		excludedBeatmapIds = [];
 		lastSearchParams = null;
 		currentRecommendation = null;
 		findButton.textContent = 'Find a map';
 		findButton.disabled = false;
+        feedbackContainer.style.display = 'none';
 		stopProgressPolling();
-	};
-
-	const updateBpmHelper = () => {
-		const bpm = parseInt(bpmInput.value, 10);
-		if (isNaN(bpm)) {
-			bpmHelperText.textContent = '';
-			return;
-		}
-		if (activeMods.has('DT')) bpmHelperText.textContent = `(Original map BPM will be ~${Math.round(bpm / 1.5)})`;
-		else if (activeMods.has('HT')) bpmHelperText.textContent = `(Original map BPM will be ~${Math.round(bpm / 0.75)})`;
-		else bpmHelperText.textContent = '';
 	};
 
 	trainingMods.forEach(mod => {
@@ -173,46 +319,41 @@ export function createRecommenderView() {
 		button.dataset.mod = mod;
 		button.addEventListener('click', () => {
 			const deactivate = m => {
-				if (activeMods.has(m)) {
-					activeMods.delete(m);
-					modContainer.querySelector(`[data-mod="${m}"]`).classList.remove('active');
+				if (plannerActiveMods.has(m)) {
+					plannerActiveMods.delete(m);
+					plannerModContainer.querySelector(`[data-mod="${m}"]`).classList.remove('active');
 				}
 			};
-			if (!activeMods.has(mod)) {
-				if (mod === 'DT') {
-					deactivate('HR');
-					deactivate('HT');
-				}
+			if (!plannerActiveMods.has(mod)) {
+				if (mod === 'DT') { deactivate('HT'); }
 				if (mod === 'HT') deactivate('DT');
-				if (mod === 'HR') {
-					deactivate('DT');
-					deactivate('EZ');
-				}
+				if (mod === 'HR') deactivate('EZ');
 				if (mod === 'EZ') deactivate('HR');
-				activeMods.add(mod);
+				plannerActiveMods.add(mod);
 				button.classList.add('active');
 			} else {
-				activeMods.delete(mod);
+				plannerActiveMods.delete(mod);
 				button.classList.remove('active');
 			}
-			updateBpmHelper();
 		});
-		modContainer.appendChild(button);
+		plannerModContainer.appendChild(button);
 	});
 
 	suggestSrButton.addEventListener('click', async () => {
+        if (!isSessionActive) return;
 		const playerName = document.getElementById('player-selector')?.value;
 		if (!playerName) {
 			statusMessage.textContent = 'Please select a player first.';
 			return;
 		}
 
-		const mods = getIntFromMods(Array.from(activeMods));
+        const currentStep = sessionQueue[currentStepIndex];
+		const mods = getIntFromMods(currentStep.mods);
 		const params = {
 			mods: mods,
-			min_acc: goalAccInput.value,
-			min_score: goalScoreInput.value,
-			max_misses: goalMissesInput.value
+			min_acc: currentStep.goals.acc,
+			min_score: currentStep.goals.useSv2 ? currentStep.goals.score : null,
+			max_misses: currentStep.goals.misses
 		};
 
 		suggestSrButton.disabled = true;
@@ -235,37 +376,33 @@ export function createRecommenderView() {
 
 	srInput.addEventListener('change', () => localStorage.setItem('recommender_sr', srInput.value));
 	bpmInput.addEventListener('change', () => localStorage.setItem('recommender_bpm', bpmInput.value));
-	bpmInput.addEventListener('input', updateBpmHelper);
-	goalAccInput.addEventListener('change', () => localStorage.setItem('goal_accuracy', goalAccInput.value));
-	goalScoreInput.addEventListener('change', () => localStorage.setItem('goal_score', goalScoreInput.value));
-	goalMissesInput.addEventListener('change', () => localStorage.setItem('goal_misses', goalMissesInput.value));
-	updateBpmHelper();
-
-	const resetView = () => {
-		resultContainer.innerHTML = '<p>Select your mods, set your target SR and max BPM, then click "Find a map".</p>';
-		feedbackContainer.style.display = 'none';
-		scanProgressContainer.style.display = 'none';
-		detectionResultContainer.style.display = 'none';
-		manualFeedbackButtons.style.display = 'flex';
-		checkPlayButton.style.display = 'block';
-		resetSession();
-		statusMessage.textContent = 'Ready to find a map.';
-	};
+    
+    sv2Toggle.addEventListener('change', () => {
+        plannerScoreGroup.style.display = sv2Toggle.checked ? 'flex' : 'none';
+        if (!sv2Toggle.checked) {
+            view.querySelector('#planner-goal-score').value = '';
+        }
+    });
 
 	findButton.addEventListener('click', async () => {
+        if (!isSessionActive) return;
+        const currentStep = sessionQueue[currentStepIndex];
+
 		const sr = parseFloat(srInput.value),
 			bpm = parseInt(bpmInput.value, 10),
-			mods = getIntFromMods(Array.from(activeMods));
-		const currentSearchParams = JSON.stringify({
-			sr,
-			bpm,
-			mods
-		});
+			mods = getIntFromMods(currentStep.mods);
+
+		const currentSearchParams = JSON.stringify({ sr, bpm, mods });
+
 		if (lastSearchParams === currentSearchParams) rerollCount++;
-		else resetSession();
+		else {
+            rerollCount = 0;
+            excludedBeatmapIds = [];
+        };
 		lastSearchParams = currentSearchParams;
+
 		if (rerollCount >= MAX_REROLLS) {
-			statusMessage.textContent = `Max rerolls reached.`;
+			statusMessage.textContent = `Max rerolls reached. Try different settings.`;
 			findButton.disabled = true;
 			return;
 		}
@@ -283,13 +420,12 @@ export function createRecommenderView() {
 				excludedBeatmapIds.push(beatmap.md5_hash);
 				currentRecommendation = {
 					md5_hash: beatmap.md5_hash,
-					mods: mods
+					mods: mods,
+                    goals: { ...currentStep.goals } // Snapshot goals for this play
 				};
 				resultContainer.innerHTML = '';
 				resultContainer.appendChild(createBeatmapCard(beatmap));
 				feedbackContainer.style.display = 'flex';
-				manualFeedbackButtons.style.display = 'flex';
-				checkPlayButton.style.display = 'block';
 				detectionResultContainer.style.display = 'none';
 				statusMessage.textContent = 'Map found! Play it and report your result.';
 				findButton.textContent = `Reroll (${MAX_REROLLS - rerollCount - 1} left)`;
@@ -308,26 +444,39 @@ export function createRecommenderView() {
 		}
 	});
 
-	const handlePassed = (message) => {
-		const currentSr = parseFloat(srInput.value);
-		const newSr = (currentSr + 0.1).toFixed(1);
-		srInput.value = newSr;
-		localStorage.setItem('recommender_sr', newSr);
-		statusMessage.textContent = message || `Goal Passed! SR increased to ${srInput.value}!`;
-		resetView();
-	};
-	const handleFailed = (message) => {
-		const currentSr = parseFloat(srInput.value);
-		const newSr = (currentSr - 0.1).toFixed(1);
-		srInput.value = newSr;
-		localStorage.setItem('recommender_sr', newSr);
-		statusMessage.textContent = message || `SR decreased to ${srInput.value}. Try again.`;
-		resetView();
-	};
+    const handleSessionProgress = (passed, reason = "") => {
+        const srChange = passed ? 0.1 : -0.1;
+        const currentSr = parseFloat(srInput.value);
+        const newSr = (currentSr + srChange).toFixed(1);
+        srInput.value = newSr;
+        localStorage.setItem('recommender_sr', newSr);
+        
+        if (passed) {
+            currentStepCompletedCount++;
+        }
 
-	passedButton.addEventListener('click', () => handlePassed());
-	failedButton.addEventListener('click', () => handleFailed());
-	skipButton.addEventListener('click', () => handleFailed());
+        updateSessionProgressDisplay();
+        resetMapFinder();
+        resultContainer.innerHTML = '<p>Ready for the next map!</p>';
+
+        if (currentStepCompletedCount >= sessionQueue[currentStepIndex].count) {
+            statusMessage.textContent = `Step complete! SR is now ${newSr}.`;
+            currentStepIndex++;
+            if (currentStepIndex >= sessionQueue.length) {
+                endSession();
+                statusMessage.textContent = `Session Complete! Congratulations!`;
+                resultContainer.innerHTML = '<h2>Session Complete!</h2>';
+            } else {
+                loadStep(currentStepIndex);
+            }
+        } else {
+            statusMessage.textContent = reason || `SR is now ${newSr}. Find the next map.`;
+        }
+    };
+
+	passedButton.addEventListener('click', () => handleSessionProgress(true, "Goal Passed!"));
+	failedButton.addEventListener('click', () => handleSessionProgress(false, "Goal Failed."));
+	skipButton.addEventListener('click', () => handleSessionProgress(false, "Map skipped."));
 
 	const pollScanProgress = (playerName) => {
 		stopProgressPolling();
@@ -341,45 +490,43 @@ export function createRecommenderView() {
 						statusMessage.textContent = 'Scan complete. Checking latest play...';
 						const latestReplay = await getLatestReplay(playerName);
 						if (latestReplay && latestReplay.beatmap_md5 === currentRecommendation.md5_hash) {
-							if ((latestReplay.mods_used & ~1) === currentRecommendation.mods) {
-								const minAcc = parseFloat(goalAccInput.value) || null;
-								const minScore = parseInt(goalScoreInput.value, 10) || null;
-								const maxMisses = parseInt(goalMissesInput.value, 10);
+							// Check if played mods are a superset of recommended mods (e.g., recommend HD, play HDHR is ok)
+                            // and core difficulty mods match (e.g. can't recommend NM and pass with DT)
+                            const coreRecMods = currentRecommendation.mods & (MODS.Easy | MODS.HardRock | MODS.DoubleTime | MODS.HalfTime);
+                            const corePlayMods = latestReplay.mods_used & (MODS.Easy | MODS.HardRock | MODS.DoubleTime | MODS.HalfTime);
+
+							if (corePlayMods === coreRecMods) {
+                                const goals = currentRecommendation.goals;
 								const playAcc = calculateAccuracy(latestReplay);
 								const hasV2 = (latestReplay.mods_used & MODS.ScoreV2) > 0;
 
-								let goalFailed = false,
-									failReason = '';
-								if (minAcc !== null && playAcc < minAcc) {
+								let goalFailed = false, failReason = '';
+								if (playAcc < goals.acc) {
 									goalFailed = true;
-									failReason = `Accuracy was ${playAcc.toFixed(2)}% (needed ${minAcc}%)`;
-								} else if (minScore !== null && !hasV2) {
+									failReason = `Accuracy was ${playAcc.toFixed(2)}% (needed ${goals.acc}%)`;
+								} else if (goals.useSv2) {
+                                    if (!goals.score) { /* Should not happen due to form validation */ }
+                                    else if (!hasV2) {
+                                        goalFailed = true;
+                                        failReason = 'Play was not on ScoreV2 (score goal requires V2)';
+                                    } else if (latestReplay.total_score < goals.score) {
+                                        goalFailed = true;
+                                        failReason = `Score was ${latestReplay.total_score.toLocaleString()} (needed ${goals.score.toLocaleString()})`;
+                                    }
+                                }
+                                
+                                if (!goalFailed && latestReplay.num_misses > goals.misses) {
 									goalFailed = true;
-									failReason = 'Play was not on ScoreV2 (score goal requires V2)';
-								} else if (minScore !== null && latestReplay.total_score < minScore) {
-									goalFailed = true;
-									failReason = `Score was ${latestReplay.total_score.toLocaleString()} (needed ${minScore.toLocaleString()})`;
-								} else if (!isNaN(maxMisses) && latestReplay.num_misses > maxMisses) {
-									goalFailed = true;
-									failReason = `Misses were ${latestReplay.num_misses} (max allowed ${maxMisses})`;
+									failReason = `Misses were ${latestReplay.num_misses} (max allowed ${goals.misses})`;
 								}
 
 								const resultMessage = goalFailed ? `Goal Failed: ${failReason}` : 'Goal Passed!';
-								manualFeedbackButtons.style.display = 'none';
-								checkPlayButton.style.display = 'none';
 								detectionResultMessage.textContent = resultMessage;
-								detectionResultMessage.className = goalFailed ? 'failed' : 'passed';
 								detectedReplayCardContainer.innerHTML = '';
 								detectedReplayCardContainer.appendChild(createReplayCard(latestReplay));
-								nextMapButton.className = goalFailed ? 'failed' : 'passed';
-								nextMapButton.onclick = () => goalFailed ? handleFailed(failReason) : handlePassed(resultMessage);
+								nextMapButton.onclick = () => handleSessionProgress(!goalFailed, failReason || resultMessage);
 								detectionResultContainer.style.display = 'flex';
-								
-								if (goalFailed) {
-                                    statusMessage.textContent = `Goal failed. Click 'Find Next Map' to adjust SR and continue.`;
-                                } else {
-                                    statusMessage.textContent = `Goal passed! Click 'Find Next Map' to increase SR and continue.`;
-                                }
+                                statusMessage.textContent = `Play detected. Click below to continue.`;
 							} else {
 								statusMessage.textContent = `Play detected, but mods don't match.`;
 								setFeedbackButtonsDisabled(false);
@@ -425,6 +572,11 @@ export function createRecommenderView() {
 			scanProgressContainer.style.display = 'none';
 		}
 	});
+    
+    // Wire up planner buttons
+    addStepButton.addEventListener('click', addStepToQueue);
+    startSessionButton.addEventListener('click', startSession);
 
+    renderQueue();
 	return view;
 }
