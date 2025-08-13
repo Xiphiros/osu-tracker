@@ -16,15 +16,21 @@ function calculateAccuracy(replay) {
 // --- Main View and Logic ---
 function applyFiltersAndRender(viewElement) {
     const replaysContainer = viewElement.querySelector('#profile-replays-container');
+    const analyticsContainer = viewElement.querySelector('#profile-analytics');
     replaysContainer.innerHTML = '';
+    analyticsContainer.innerHTML = '';
 
     const sortValue = viewElement.querySelector('#sort-select').value;
-    const minAcc = parseFloat(viewElement.querySelector('#acc-filter').value) || 0;
-    const minStars = parseFloat(viewElement.querySelector('#stars-filter').value) || 0;
+    const minAcc = parseFloat(viewElement.querySelector('#acc-filter-min').value) || 0;
+    const maxAcc = parseFloat(viewElement.querySelector('#acc-filter-max').value) || 100;
+    const minStars = parseFloat(viewElement.querySelector('#stars-filter-min').value) || 0;
+    const minBpm = parseFloat(viewElement.querySelector('#bpm-filter-min').value) || 0;
+    const maxBpm = parseFloat(viewElement.querySelector('#bpm-filter-max').value) || Infinity;
     const exactMatch = viewElement.querySelector('#exact-mod-match-toggle').checked;
 
     let filteredScores = allScores;
 
+    // Mod filtering
     if (activeModFilters.size > 0) {
         filteredScores = filteredScores.filter(replay => {
             const replayMods = new Set(getModsFromInt(replay.mods_used));
@@ -35,13 +41,32 @@ function applyFiltersAndRender(viewElement) {
         });
     }
 
-    if (minAcc > 0) {
-        filteredScores = filteredScores.filter(replay => calculateAccuracy(replay) >= minAcc);
-    }
-    if (minStars > 0) {
-        filteredScores = filteredScores.filter(replay => (replay.stars || 0) >= minStars);
+    // Numerical range filtering
+    filteredScores = filteredScores.filter(replay => {
+        const acc = calculateAccuracy(replay);
+        const stars = replay.stars || 0;
+        const bpm = replay.beatmap?.bpm || 0;
+        
+        return acc >= minAcc && acc <= maxAcc &&
+               stars >= minStars &&
+               bpm >= minBpm && bpm <= maxBpm;
+    });
+
+    // --- Analytics Calculation ---
+    if (filteredScores.length > 0) {
+        const scoresForAnalytics = [...filteredScores].sort((a, b) => (b.stars || 0) - (a.stars || 0)).slice(0, 100);
+        const totalStars = scoresForAnalytics.reduce((sum, score) => sum + (score.stars || 0), 0);
+        const avgStars = scoresForAnalytics.length > 0 ? (totalStars / scoresForAnalytics.length).toFixed(2) : '0.00';
+        
+        analyticsContainer.innerHTML = `
+            <div class="stat-item">
+                <span class="stat-label">Avg. SR of Top ${scoresForAnalytics.length} (by SR)</span>
+                <span class="stat-value">★ ${avgStars}</span>
+            </div>
+        `;
     }
 
+    // Main sorting for display
     filteredScores.sort((a, b) => {
         switch (sortValue) {
             case 'pp': return (b.pp || 0) - (a.pp || 0);
@@ -68,6 +93,7 @@ export function createProfileView() {
         <div id="profile-header">
             <h2 id="profile-player-name"></h2>
             <div id="profile-stats" class="stats-container"></div>
+            <div id="profile-analytics" class="stats-container"></div>
             <div class="profile-filters">
                 <div id="mod-filter-container" class="mod-filter-container"></div>
                 <select id="sort-select">
@@ -76,8 +102,11 @@ export function createProfileView() {
                     <option value="date">Sort by: Most Recent</option>
                     <option value="stars">Sort by: Highest Stars</option>
                 </select>
-                <input type="number" id="acc-filter" min="0" max="100" step="0.1" placeholder="Min Accuracy %">
-                <input type="number" id="stars-filter" min="0" step="0.1" placeholder="Min Stars ★">
+                <input type="number" id="acc-filter-min" min="0" max="100" step="0.1" placeholder="Min Acc %">
+                <input type="number" id="acc-filter-max" min="0" max="100" step="0.1" placeholder="Max Acc %">
+                <input type="number" id="stars-filter-min" min="0" step="0.1" placeholder="Min Stars ★">
+                <input type="number" id="bpm-filter-min" min="0" step="1" placeholder="Min BPM">
+                <input type="number" id="bpm-filter-max" min="0" step="1" placeholder="Max BPM">
                 <div class="toggle-switch-container">
                     <label for="exact-mod-match-toggle" class="toggle-switch-label">Exact Match</label>
                     <label class="toggle-switch">
@@ -111,7 +140,7 @@ export async function loadProfile(viewElement, playerName) {
     statusMessage.textContent = `Loading ${playerName}'s profile...`;
     
     if (!viewInitialized) {
-        viewElement.querySelectorAll('#sort-select, #acc-filter, #stars-filter, #exact-mod-match-toggle').forEach(el => {
+        viewElement.querySelectorAll('#sort-select, #acc-filter-min, #acc-filter-max, #stars-filter-min, #bpm-filter-min, #bpm-filter-max, #exact-mod-match-toggle').forEach(el => {
             el.addEventListener('input', () => applyFiltersAndRender(viewElement));
         });
         viewInitialized = true;
