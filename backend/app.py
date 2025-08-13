@@ -33,6 +33,12 @@ app = Flask(__name__, static_folder=static_folder_path, static_url_path='')
 CORS(app)
 # The global BEATMAP_CACHE is no longer needed. Data is in the database.
 
+@app.route('/api/beatmaps', methods=['GET'])
+def get_beatmaps():
+    """API endpoint to get all stored beatmap data."""
+    beatmaps = database.get_all_beatmaps()
+    return jsonify(beatmaps)
+
 @app.route('/api/replays', methods=['GET'])
 def get_replays():
     """API endpoint to get all stored replay data, enriched with beatmap details."""
