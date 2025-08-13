@@ -1,4 +1,4 @@
-import { getReplays, scanReplays, getPlayers } from './services/api.js';
+import { getPlayers, getConfig } from './services/api.js';
 import { createScoresView, loadScores } from './views/ScoresView.js';
 import { createProfileView, loadProfile } from './views/ProfileView.js';
 import { createBeatmapsView, loadBeatmaps } from './views/BeatmapsView.js';
@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const navLinks = document.querySelectorAll('.nav-link');
     const userSelectorContainer = document.getElementById('user-selector-container');
 
-    let currentPlayer = null; // State to track the selected player
+    let currentPlayer = null;
 
     const views = {
         scores: createScoresView(),
@@ -21,10 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
         config: createConfigView(),
     };
     
-    // Add all views to the DOM, but keep them hidden initially
     for (const key in views) {
         views[key].dataset.viewName = key;
-        views[key].style.display = 'none'; // Explicitly hide all views
+        views[key].style.display = 'none';
         mainContent.appendChild(views[key]);
     }
 
@@ -44,8 +43,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 selector.addEventListener('change', (e) => {
                     currentPlayer = e.target.value;
-                    // If a player is selected, switch to their profile. Otherwise, go to scores.
-                    switchView(currentPlayer ? 'profile' : 'scores');
+                    const activeViewName = document.querySelector('.view[style*="display: block"]')?.dataset.viewName;
+                    if (activeViewName === 'profile') {
+                        loadProfile(views.profile, currentPlayer);
+                    }
                 });
             } else {
                 userSelectorContainer.innerHTML = '<p style="font-size: 0.8em; color: #aaa; text-align: center;">No players found. Please run a scan from the Config page.</p>';
@@ -57,11 +58,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function switchView(viewName) {
-        stopAudio(); // Stop any playing music when changing views
-        document.getElementById('status-message').textContent = ''; // Clear status message on view switch
+        stopAudio();
+        document.getElementById('status-message').textContent = '';
         navLinks.forEach(link => link.classList.remove('active'));
 
-        // Hide all views
         for (const key in views) {
             views[key].style.display = 'none';
         }
@@ -70,12 +70,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const link = document.querySelector(`.nav-link[data-view="${viewName}"]`);
         
         if (view) {
-            view.style.display = 'block'; // Show only the target view
-            // Load data for the activated view
+            view.style.display = 'block';
+            // Dispatch a custom event to notify the view it's being activated.
+            // This is useful for views that need to load data upon display, like Config.
+            view.dispatchEvent(new CustomEvent('viewactivated'));
+
             if (viewName === 'scores') loadScores(view);
             else if (viewName === 'profile') loadProfile(view, currentPlayer);
             else if (viewName === 'beatmaps') loadBeatmaps(view);
-            // Config and Recommender views require no initial data loading
         }
         if (link) {
             link.classList.add('active');
@@ -88,7 +90,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const viewName = e.target.getAttribute('data-view');
             
             if (viewName === 'profile' && !currentPlayer) {
-                // Display a message in the global status footer and do not switch views.
                 const statusMessage = document.getElementById('status-message');
                 statusMessage.textContent = 'Please select a player to view their profile.';
                 return;
@@ -96,44 +97,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const activeLink = document.querySelector('.nav-link.active');
             if (activeLink && activeLink.getAttribute('data-view') === viewName) {
-                return; // Do nothing if clicking the already active view
+                return;
             }
 
             switchView(viewName);
         });
     });
 
-    // Listen for the custom 'datachanged' event from the Config view
-    mainContent.addEventListener('datachanged', () => {
-        console.log('Data changed event received, refreshing player list and current view.');
-        populatePlayerSelector();
+    mainContent.addEventListener('datachanged', async () => {
+        console.log('Data changed event received, refreshing...');
+        const config = await getConfig();
+        currentPlayer = config.default_player;
         
-        // Also refresh the current view
-        const activeView = mainContent.querySelector('.view.active');
+        await populatePlayerSelector();
+        
+        const activeView = mainContent.querySelector('.view[style*="display: block"]');
         if (activeView) {
             const viewName = activeView.dataset.viewName;
             const view = views[viewName];
             if (view) {
                 switch(viewName) {
-                    case 'scores':
-                        loadScores(view);
-                        break;
-                    case 'profile':
-                        if (currentPlayer) loadProfile(view, currentPlayer);
-                        break;
-                    case 'beatmaps':
-                        loadBeatmaps(view);
-                        break;
+                    case 'scores': loadScores(view); break;
+                    case 'profile': loadProfile(view, currentPlayer); break;
+                    case 'beatmaps': loadBeatmaps(view); break;
+                    case 'config': view.dispatchEvent(new CustomEvent('viewactivated')); break;
                 }
             }
         }
     });
 
     async function initializeApp() {
+        const config = await getConfig();
+        currentPlayer = config.default_player;
         await populatePlayerSelector();
-        // Start on the main scores view if players exist, otherwise on config page
+        
         const players = await getPlayers();
-        switchView(players.length > 0 ? 'scores' : 'config');
+        if (currentPlayer) {
+            switchView('profile');
+        } else if (players.length > 0) {
+            switchView('scores');
+        } else {
+            switchView('config');
+        }
     }
 
     initializeApp();
