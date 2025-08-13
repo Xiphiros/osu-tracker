@@ -374,7 +374,12 @@ export function createRecommenderView() {
 								nextMapButton.className = goalFailed ? 'failed' : 'passed';
 								nextMapButton.onclick = () => goalFailed ? handleFailed(failReason) : handlePassed(resultMessage);
 								detectionResultContainer.style.display = 'flex';
-								statusMessage.textContent = "Play evaluated. Click below to continue.";
+								
+								if (goalFailed) {
+                                    statusMessage.textContent = `Goal failed. Click 'Find Next Map' to adjust SR and continue.`;
+                                } else {
+                                    statusMessage.textContent = `Goal passed! Click 'Find Next Map' to increase SR and continue.`;
+                                }
 							} else {
 								statusMessage.textContent = `Play detected, but mods don't match.`;
 								setFeedbackButtonsDisabled(false);
