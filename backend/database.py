@@ -108,6 +108,21 @@ def init_db():
         )
     ''')
     
+    # New table for caching modded difficulty calculations
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS beatmap_mod_cache (
+            md5_hash TEXT NOT NULL,
+            mods INTEGER NOT NULL,
+            stars REAL,
+            ar REAL,
+            od REAL,
+            cs REAL,
+            hp REAL,
+            bpm REAL,
+            PRIMARY KEY (md5_hash, mods)
+        )
+    ''')
+
     conn.commit()
     _migrate_db(conn)
     conn.close()
@@ -305,6 +320,30 @@ def add_or_update_beatmaps(beatmaps_data):
                  f"({cursor.rowcount} rows affected)")
     conn.close()
 
+def add_beatmap_mod_cache(cache_data):
+    """Inserts or updates a batch of modded difficulty caches."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # cache_data is expected to be a list of dicts
+    params = [(d['md5_hash'], d['mods'], d['stars'], d['ar'], d['od'], d['cs'], d['hp'], d['bpm']) for d in cache_data]
+
+    cursor.executemany('''
+        INSERT INTO beatmap_mod_cache (md5_hash, mods, stars, ar, od, cs, hp, bpm)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(md5_hash, mods) DO UPDATE SET
+            stars=excluded.stars,
+            ar=excluded.ar,
+            od=excluded.od,
+            cs=excluded.cs,
+            hp=excluded.hp,
+            bpm=excluded.bpm
+    ''', params)
+    
+    conn.commit()
+    logging.info(f"Saved {len(params)} entries to beatmap mod cache.")
+    conn.close()
+
 def update_beatmap_details(md5_hash, details):
     """Updates a beatmap record with details parsed from the .osu file."""
     conn = get_db_connection()
@@ -332,110 +371,103 @@ def update_beatmap_details(md5_hash, details):
     
 def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[]):
     """
-    Finds a single, random osu! standard beatmap matching the criteria,
-    calculating difficulty with mods on the fly.
+    Finds a single, random osu! standard beatmap matching the criteria
+    by using a pre-calculated cache of modded difficulties.
     """
     load_dotenv()
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    mods_dt = (mods & 64) > 0 or (mods & 512) > 0
-    mods_ht = (mods & 256) > 0
-    mods_hr = (mods & 16) > 0
-    mods_ez = (mods & 2) > 0
-
-    base_query = "SELECT * FROM beatmaps WHERE game_mode = 0 AND stars IS NOT NULL AND bpm IS NOT NULL"
-    params = []
-
-    if mods_dt:
-        base_query += " AND bpm <= ?"
-        params.append(max_bpm / 1.5)
-        base_query += " AND stars BETWEEN ? AND ?"
-        params.extend([target_sr * 0.5, target_sr * 0.8])
-    elif mods_ht:
-        base_query += " AND bpm <= ?"
-        params.append(max_bpm / 0.75)
-        base_query += " AND stars BETWEEN ? AND ?"
-        params.extend([target_sr, target_sr * 1.5])
-    elif mods_hr:
-        base_query += " AND bpm <= ?"
-        params.append(max_bpm)
-        base_query += " AND stars BETWEEN ? AND ?"
-        params.extend([target_sr * 0.7, target_sr * 0.95])
-    elif mods_ez:
-        base_query += " AND bpm <= ?"
-        params.append(max_bpm)
-        base_query += " AND stars BETWEEN ? AND ?"
-        params.extend([target_sr * 1.2, target_sr * 2.5])
-    else:
-        base_query += " AND bpm <= ?"
-        params.append(max_bpm)
-        base_query += " AND stars >= ? AND stars < ?"
-        params.extend([target_sr, target_sr + 0.1])
-
-    if excluded_ids:
-        placeholders = ','.join('?' for _ in excluded_ids)
-        base_query += f" AND md5_hash NOT IN ({placeholders})"
-        params.extend(excluded_ids)
-
-    base_query += " ORDER BY RANDOM() LIMIT 100"
+    # Determine the primary difficulty-altering mod to query the cache
+    # Order of precedence: DT > HT > HR > EZ
+    base_mod = 0
+    if (mods & 64): base_mod = 64      # DoubleTime
+    elif (mods & 256): base_mod = 256   # HalfTime
+    elif (mods & 16): base_mod = 16     # HardRock
+    elif (mods & 2): base_mod = 2       # Easy
     
-    logging.debug(f"Recommendation query: {base_query} with params {params}")
-    cursor.execute(base_query, params)
-    candidates = cursor.fetchall()
+    sr_lower_bound = target_sr
+    sr_upper_bound = target_sr + 0.15 # Widen range slightly for more results
+
+    if base_mod != 0:
+        # Query the cache for maps with the primary mod
+        exclude_placeholders = '?' * len(excluded_ids)
+        query = f"""
+            SELECT b.*
+            FROM beatmap_mod_cache c
+            JOIN beatmaps b ON c.md5_hash = b.md5_hash
+            WHERE c.mods = ?
+              AND c.stars >= ? AND c.stars < ?
+              AND c.bpm <= ?
+              AND b.game_mode = 0
+              {f"AND b.md5_hash NOT IN ({','.join(exclude_placeholders)})" if excluded_ids else ""}
+            ORDER BY RANDOM()
+            LIMIT 1
+        """
+        params = [base_mod, sr_lower_bound, sr_upper_bound, max_bpm] + excluded_ids
+        logging.debug(f"Recommendation query (cached): {query} with params {params}")
+        cursor.execute(query, params)
+        row = cursor.fetchone()
+    else:
+        # No difficulty-altering mods, query the main beatmaps table
+        exclude_placeholders = '?' * len(excluded_ids)
+        query = f"""
+            SELECT * FROM beatmaps
+            WHERE game_mode = 0
+              AND stars >= ? AND stars < ?
+              AND bpm <= ?
+              {f"AND md5_hash NOT IN ({','.join(exclude_placeholders)})" if excluded_ids else ""}
+            ORDER BY RANDOM()
+            LIMIT 1
+        """
+        params = [sr_lower_bound, sr_upper_bound, max_bpm] + excluded_ids
+        logging.debug(f"Recommendation query (NoMod): {query} with params {params}")
+        cursor.execute(query, params)
+        row = cursor.fetchone()
+
     conn.close()
 
-    if not candidates:
-        logging.warning("No initial candidates found from database for recommendation.")
+    if not row:
+        logging.warning("No map found matching criteria from database.")
         return None
 
+    beatmap = dict(row)
     osu_folder = os.getenv('OSU_FOLDER')
     if not osu_folder:
-        logging.error("OSU_FOLDER not set, cannot find .osu files for recommendation.")
-        return None
+        logging.error("OSU_FOLDER not set, cannot find .osu file for final calculation.")
+        return beatmap # Return with possibly stale data if path fails
+
     songs_path = os.path.join(osu_folder, 'Songs')
-    
-    sr_upper_bound = target_sr + 0.1
+    osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
 
-    for row in candidates:
-        beatmap = dict(row)
-        if not beatmap.get('folder_name') or not beatmap.get('osu_file_name'): continue
+    if not os.path.exists(osu_file_path):
+        logging.warning(f"Could not find .osu file for recommended map: {osu_file_path}")
+        return beatmap
+
+    try:
+        # Recalculate with the *full* mod combination to get the most accurate, final stats.
+        # This handles cases like HDHR, where the cache was queried on HR but we need HD's effect too.
+        rosu_map = rosu_pp_py.Beatmap(path=osu_file_path)
+        diff_calc = rosu_pp_py.Difficulty(mods=mods)
+        diff_attrs = diff_calc.calculate(rosu_map)
         
-        osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
-        if not os.path.exists(osu_file_path): continue
+        attr_builder = rosu_pp_py.BeatmapAttributesBuilder(map=rosu_map, mods=mods)
+        modded_map_attrs = attr_builder.build()
 
-        try:
-            rosu_map = rosu_pp_py.Beatmap(path=osu_file_path)
-            diff_calc = rosu_pp_py.Difficulty(mods=mods)
-            diff_attrs = diff_calc.calculate(rosu_map)
-            modded_stars = diff_attrs.stars
-            
-            attr_builder = rosu_pp_py.BeatmapAttributesBuilder(map=rosu_map, mods=mods)
-            modded_map_attrs = attr_builder.build()
-            clock_rate = modded_map_attrs.clock_rate
-            modded_bpm = beatmap.get('bpm', 0) * clock_rate
-            
-            logging.debug(f"Checking candidate {beatmap['osu_file_name']}: Modded SR={modded_stars:.2f}, Modded BPM={modded_bpm:.2f}")
+        beatmap['stars'] = round(diff_attrs.stars, 2)
+        beatmap['bpm'] = round(beatmap['bpm'] * modded_map_attrs.clock_rate)
+        beatmap['ar'] = round(modded_map_attrs.ar, 2)
+        beatmap['cs'] = round(modded_map_attrs.cs, 2)
+        beatmap['hp'] = round(modded_map_attrs.hp, 2)
+        beatmap['od'] = round(modded_map_attrs.od, 2)
+        
+        logging.info(f"Found recommendation: {beatmap['title']} with mods {mods}, final stats: {beatmap['stars']}*, {beatmap['bpm']}BPM")
+        return beatmap
 
-            if target_sr <= modded_stars < sr_upper_bound and modded_bpm <= max_bpm:
-                beatmap['stars'] = round(modded_stars, 2)
-                beatmap['bpm'] = round(modded_bpm)
-                if beatmap.get('bpm_min'): beatmap['bpm_min'] = round(beatmap['bpm_min'] * clock_rate)
-                if beatmap.get('bpm_max'): beatmap['bpm_max'] = round(beatmap['bpm_max'] * clock_rate)
-                beatmap['ar'] = round(modded_map_attrs.ar, 2)
-                beatmap['cs'] = round(modded_map_attrs.cs, 2)
-                beatmap['hp'] = round(modded_map_attrs.hp, 2)
-                beatmap['od'] = round(modded_map_attrs.od, 2)
+    except Exception as e:
+        logging.error(f"Could not perform final calculation for {osu_file_path} with mods {mods}: {e}", exc_info=False)
+        return beatmap
 
-                logging.info(f"Found recommendation: {beatmap['title']} with mods {mods}, final stats: {beatmap['stars']}*, {beatmap['bpm']}BPM")
-                return beatmap
-                
-        except Exception as e:
-            logging.error(f"Could not calculate difficulty for {osu_file_path} with mods {mods}: {e}", exc_info=False)
-            continue
-            
-    logging.warning(f"No map found matching criteria after checking {len(candidates)} candidates.")
-    return None
 
 def update_replay_pp(replay_md5, pp, stars, map_max_combo):
     """Updates the pp, stars, and map_max_combo for an existing replay record."""
