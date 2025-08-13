@@ -27,6 +27,17 @@ export function createBeatmapCard(beatmap) {
         bpmText = 'N/A';
     }
 
+    const aimValue = beatmap.aim;
+    const speedValue = beatmap.speed;
+    let skillHtml = '';
+    if (aimValue && speedValue) {
+        skillHtml = `
+            <div class="stat-item stat-aim" title="Aim Difficulty"><span class="label">🎯</span><span class="value">${aimValue}</span></div>
+            <div class="stat-item stat-speed" title="Speed Difficulty"><span class="label">⚡</span><span class="value">${speedValue}</span></div>
+        `;
+    }
+
+
     card.innerHTML = `
         <div class="card-content-wrapper">
             <div class="card-info">
@@ -43,6 +54,7 @@ export function createBeatmapCard(beatmap) {
                 <div class="stat-item" title="HP Drain"><span class="label">HP</span><span class="value">${beatmap.hp}</span></div>
                 <div class="card-footer-stats">
                     <div class="stat-item" title="Star Rating"><span class="label">★</span><span class="value">${starsText}</span></div>
+                    ${skillHtml}
                     <div class="stat-item" title="Beats Per Minute"><span class="label">♫</span><span class="value">${bpmText}</span></div>
                 </div>
             </div>
