@@ -109,6 +109,8 @@ export function createRecommenderView() {
                         <label for="focus-aim">Aim</label>
                         <input type="radio" id="focus-speed" name="skill-focus" value="speed">
                         <label for="focus-speed">Speed</label>
+                        <input type="radio" id="focus-technical" name="skill-focus" value="technical">
+                        <label for="focus-technical">Technical</label>
                     </div>
                 </div>
                 <div class="recommender-actions-wrapper">
