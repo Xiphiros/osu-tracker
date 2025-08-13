@@ -13,7 +13,8 @@
     padding: 0;
 }
 
-.beatmap-card::before {
+/* Only create the gradient overlay for cards with a background image */
+.beatmap-card.has-bg::before {
     content: '';
     position: absolute;
     top: 0; right: 0; bottom: 0; left: 0;
@@ -24,13 +25,17 @@
 
 .beatmap-card .card-content-wrapper {
     position: relative;
-    z-index: 1;
     display: flex;
     justify-content: space-between;
     align-items: center;
     width: 100%;
     padding: 20px;
     box-sizing: border-box;
+}
+
+/* Content must be placed on top of the gradient overlay */
+.beatmap-card.has-bg .card-content-wrapper {
+    z-index: 1;
 }
 
 .beatmap-card .card-info {
