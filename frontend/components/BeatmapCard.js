@@ -30,10 +30,7 @@ export function createBeatmapCard(beatmap) {
     card.innerHTML = `
         <div class="card-content-wrapper">
             <div class="card-info">
-                <div class="card-buttons">
-                    <button class="play-button card-button">▶</button>
-                    <button class="open-button card-button" title="Open in osu! client"><span class="open-button-icon"></span></button>
-                </div>
+                <button class="play-button">▶</button>
                 <div class="card-text-content">
                     <h3 class="card-title" title="${beatmap.artist} - ${beatmap.title}">${beatmap.artist || 'Unknown Artist'} - ${beatmap.title || 'Unknown Title'}</h3>
                     <p class="card-subtitle" title="[${beatmap.difficulty}] mapped by ${beatmap.creator}">[${beatmap.difficulty || '?'}] by ${beatmap.creator || 'Unknown Mapper'}</p>
@@ -65,16 +62,6 @@ export function createBeatmapCard(beatmap) {
         });
     } else {
         playButton.disabled = true;
-    }
-
-    const openButton = card.querySelector('.open-button');
-    if (beatmap.beatmap_id && beatmap.beatmap_id > 0) {
-        openButton.addEventListener('click', (e) => {
-            e.stopPropagation();
-            window.open(`osu://b/${beatmap.beatmap_id}`, '_blank');
-        });
-    } else {
-        openButton.disabled = true;
     }
 
     return card;
