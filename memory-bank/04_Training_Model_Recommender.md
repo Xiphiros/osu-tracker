@@ -14,11 +14,7 @@ The model requires four primary user inputs to begin a session:
 1.  **Target Star Rating (SR):** The difficulty level the player wants to start at. This can be entered manually or suggested by the application.
 2.  **Max BPM:** The maximum "main" BPM the player is comfortable playing at for the session.
 3.  **Mods:** The user can select a combination of mods (EZ, HD, HR, DT, HT, FL) to train.
-4.  **Skill Focus:** The user can specify a type of skill to target. Options include:
-    *   **Balanced:** (Default) Does not filter maps by skill type.
-    *   **Aim:** Prioritizes maps where aim is the dominant difficulty component.
-    *   **Speed:** Prioritizes maps where tapping speed is the dominant difficulty component.
-    *   **Technical:** Prioritizes maps with complex slider patterns and high aim difficulty relative to pure jumps.
+4.  **Skill Focus:** The user can specify a type of skill to target, which will use an advanced heuristic to filter maps. See Section 4.4 for details.
 
 ### 4.2.2. Search Criteria
 
@@ -26,49 +22,52 @@ When a recommendation is requested, the system searches the local beatmap databa
 -   **Game Mode:** Must be osu!standard (`game_mode = 0`).
 -   **Star Rating:** Must be within a narrow range: `modded_stars >= Target SR` and `modded_stars < Target SR + 0.15`.
 -   **BPM:** The map's mod-adjusted main BPM must be less than or equal to the specified Max BPM (`modded_bpm <= Max BPM`).
--   **Skill Focus Filter (if applicable):**
-    -   If `focus = 'aim'`, the query adds `WHERE aim_difficulty > speed_difficulty`.
-    -   If `focus = 'speed'`, the query adds `WHERE speed_difficulty > aim_difficulty`.
-    -   If `focus = 'technical'`, the query adds `WHERE slider_factor > 1.3`.
-    -   If `focus = 'balanced'`, no additional skill-based `WHERE` clause is added.
+-   **Skill Focus Filter:** An advanced heuristic is applied based on the user's selected focus. See Section 4.4.
 
 ## 4.3. Session Flow
 
-### 4.3.1. Current Manual Flow
-
 The current implementation requires manual user feedback to guide the session.
-1.  **Initialization:** The user selects their desired mods and skill focus, and enters their starting SR and Max BPM. They can use the "Suggest" button to get a recommended starting SR.
+1.  **Initialization:** The user selects their desired mods and skill focus, and enters their starting SR and Max BPM.
 2.  **Request:** The user clicks "Find a map". The system finds and displays a suitable beatmap.
-3.  **Play:** The user switches to the osu! client, finds the recommended map, and plays it with the intention of meeting a personal goal.
-4.  **Feedback:** The user returns to the tracker and provides feedback:
-    *   **"Passed Goal":** If their performance met their goal. This increases the Target SR by 0.1.
-    *   **"Failed Goal":** If their performance did not meet their goal. This decreases the Target SR by 0.1.
-    *   **"Skip":** If the map was undesirable for any reason (e.g., too difficult, disliked song). This also decreases the Target SR by 0.1.
-5.  **Iteration:** The user can click "Reroll" up to 3 times to get a new map with the same settings, or click "Find a map" to start a new search with the adjusted SR.
+3.  **Play:** The user plays the recommended map in the osu! client.
+4.  **Feedback:** The user returns to the tracker and reports whether they passed or failed their personal goal for that map, which adjusts the session SR accordingly.
 
-## 4.4. Future Automation & Roadmap
+## 4.4. Defining Skill-Based Difficulty: An Advanced Model
 
-The end goal is a fully automated system that minimizes user input after the initial setup.
+To provide meaningful recommendations, we must move beyond a simple aim-vs-speed dichotomy. By leveraging the detailed output of `rosu-pp`, we can define more nuanced skill categories.
 
-### 4.4.1. Automatic Starting SR Suggestion
+### 4.4.1. Key Metrics from `rosu-pp`
 
-To eliminate guesswork, the system provides a suggested starting SR based on a player's recent history with a specific mod and skill combination.
-1.  A "Suggest" button is available next to the SR input field.
-2.  When clicked, the system fetches all of the user's plays with the currently selected mods.
-3.  It then filters these plays based on the **selected skill focus**:
-    *   **Aim:** Keeps only plays where `aim_difficulty > speed_difficulty`.
-    *   **Speed:** Keeps only plays where `speed_difficulty > aim_difficulty`.
-    *   **Technical:** Keeps only plays where `slider_factor > 1.3`.
-    *   **Balanced:** Does not apply a skill filter.
-4.  It takes the **most recent 100** of these filtered plays.
-5.  It calculates the average SR of these 100 plays.
-6.  This average is rounded to the nearest tenth (e.g., 5.56 becomes 5.6) and populated in the Target SR input field.
+The `DifficultyAttributes` object provides several crucial values for our model:
 
-### 4.4.2. User-Definable Goals & Automatic Session Management
+-   **`aim` & `speed`**: Represent the *peak difficulty* of each skill. A high value means at least one pattern in the map is very demanding for that skill.
+-   **`aim_difficult_slider_count`**: The raw, weighted sum of the difficulty of every slider in the map. The difficulty is determined by path length, duration, and curvature. This is our primary indicator for the **absolute amount of difficult slider content**.
+-   **`slider_factor`**: A ratio <= 1.0 that represents how much of the potential jump-based aim strain is "preserved" by sliders. A value of 1.0 means sliders are as difficult to aim as circles. A lower value indicates sliders provide more "rest" and reduce the overall aim strain. It measures aim-intensity, not technicality.
+-   **`speed_note_count`**: The number of notes considered for speed calculation, weighted by their difficulty. This is a strong indicator of how much "tapping" is in the map.
+-   **`n_sliders` & `n_objects`**: The raw counts of sliders and total objects, used for normalization.
 
-This is the next major step, creating a seamless training loop:
--   **User-Definable Goals:** A new UI section will allow players to define what constitutes a "Passed Goal" (e.g., >= 96% accuracy, <= 5 misses).
--   **Play Detection:** After a map is recommended, the application will monitor for new replays in the background.
--   **Automatic Evaluation:** When a new replay appears on the recommended map, the system will automatically compare its stats against the user's defined goals.
--   **Automatic SR Adjustment:** Based on the evaluation, the system will automatically adjust the user's session SR up or down and prompt them to find the next map.
--   **Persistent State:** The user's current training SR and defined goals will be saved locally, so they are automatically loaded the next time they open the Recommender tab.
+### 4.4.2. Proposed Skill Categories & Heuristics
+
+Using these metrics, we can define the following skill focuses for the recommender.
+
+1.  **Jump Aim**
+    -   **Description:** Maps focused on snappy, wide-angle, or rhythmically complex jumps between circles.
+    -   **Heuristic:** A high ratio of `aim` to `speed` difficulty. A high `slider_factor` (close to 1.0) indicates that even the sliders behave like jumps, reinforcing the category.
+    -   **`WHERE` clause:** `aim > speed * 1.1 AND slider_factor > 0.95`
+
+2.  **Technical Aim**
+    -   **Description:** Maps where difficulty comes from reading and executing complex or fast slider patterns. This is our most sophisticated category.
+    -   **Heuristic:** We want maps with a high *average slider complexity*. This is best measured by normalizing the total slider difficulty by the number of sliders. A high value here indicates the map is dense with challenging sliders.
+    -   **`WHERE` clause:** `(aim_difficult_slider_count / n_sliders) > 0.5` (Note: threshold `0.5` is a placeholder for tuning) AND `n_sliders > (n_objects * 0.2)` (ensures sliders are a significant portion of the map).
+
+3.  **Burst Speed**
+    -   **Description:** Maps focused on short, intense bursts of high-speed tapping, often with simpler aim patterns.
+    -   **Heuristic:** High `speed` difficulty relative to `aim`. A moderate `speed_note_count` (normalized by total objects) suggests the speed is not sustained over the entire map.
+    -   **`WHERE` clause:** `speed > aim * 1.1 AND (speed_note_count / n_objects) < 0.4`
+
+4.  **Stream / Stamina Speed**
+    -   **Description:** Maps featuring long, continuous streams that test tapping consistency and stamina.
+    -   **Heuristic:** The key indicator is a high `speed_note_count` normalized by total objects, signifying that a large portion of the map is a tapping challenge. Aim and speed values are often comparable.
+    -   **`WHERE` clause:** `(speed_note_count / n_objects) > 0.4`
+
+These heuristics provide a much more powerful and accurate way to filter maps. Implementing this will require caching these additional attributes in our database.
