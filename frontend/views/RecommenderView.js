@@ -11,6 +11,12 @@ function stopProgressPolling() {
     }
 }
 
+function calculateAccuracy(replay) {
+    const totalHits = replay.num_300s + replay.num_100s + replay.num_50s + replay.num_misses;
+    if (totalHits === 0) return 0;
+    return ((replay.num_300s * 300 + replay.num_100s * 100 + replay.num_50s * 50) / (totalHits * 300)) * 100;
+}
+
 export function createRecommenderView() {
     const view = document.createElement('div');
     view.id = 'recommender-view';
@@ -18,6 +24,9 @@ export function createRecommenderView() {
 
     const savedSr = localStorage.getItem('recommender_sr') || '5.5';
     const savedBpm = localStorage.getItem('recommender_bpm') || '200';
+    const savedAcc = localStorage.getItem('goal_accuracy') || '96';
+    const savedScore = localStorage.getItem('goal_score') || '';
+    const savedMisses = localStorage.getItem('goal_misses') || '';
 
     view.innerHTML = `
         <h2>Training Recommender</h2>
@@ -35,6 +44,23 @@ export function createRecommenderView() {
                 </div>
             </div>
             <button id="find-map-button">Find a map</button>
+        </div>
+        <div class="goal-settings-container">
+            <h3>Goal Settings (for automatic detection)</h3>
+            <div class="goal-inputs">
+                 <div class="control-group">
+                    <label for="goal-accuracy">Min Accuracy (%)</label>
+                    <input type="number" id="goal-accuracy" min="0" max="100" step="0.1" placeholder="e.g., 96" value="${savedAcc}">
+                </div>
+                <div class="control-group">
+                    <label for="goal-score">Min Score</label>
+                    <input type="number" id="goal-score" min="0" step="1000" placeholder="e.g., 500000" value="${savedScore}">
+                </div>
+                <div class="control-group">
+                    <label for="goal-misses">Max Misses</label>
+                    <input type="number" id="goal-misses" min="0" step="1" placeholder="e.g., 5" value="${savedMisses}">
+                </div>
+            </div>
         </div>
         <div id="recommender-result">
             <p>Select your mods, set your target SR and max BPM, then click "Find a map".</p>
@@ -65,6 +91,10 @@ export function createRecommenderView() {
     const checkPlayButton = view.querySelector('#check-play-button');
     const modContainer = view.querySelector('.mod-selection-container');
     const statusMessage = document.getElementById('status-message');
+    
+    const goalAccInput = view.querySelector('#goal-accuracy');
+    const goalScoreInput = view.querySelector('#goal-score');
+    const goalMissesInput = view.querySelector('#goal-misses');
     
     const scanProgressContainer = view.querySelector('#scan-progress-container');
     const scanProgressBar = view.querySelector('#scan-progress');
@@ -145,10 +175,14 @@ export function createRecommenderView() {
     bpmInput.addEventListener('change', () => localStorage.setItem('recommender_bpm', bpmInput.value));
     bpmInput.addEventListener('input', updateBpmHelper);
     
+    goalAccInput.addEventListener('change', () => localStorage.setItem('goal_accuracy', goalAccInput.value));
+    goalScoreInput.addEventListener('change', () => localStorage.setItem('goal_score', goalScoreInput.value));
+    goalMissesInput.addEventListener('change', () => localStorage.setItem('goal_misses', goalMissesInput.value));
+
     updateBpmHelper();
 
     const resetView = () => {
-        resultContainer.innerHTML = '<p>Set your target SR and max BPM, then click "Find a map".</p>';
+        resultContainer.innerHTML = '<p>Select your mods, set your target SR and max BPM, then click "Find a map".</p>';
         feedbackContainer.style.display = 'none';
         scanProgressContainer.style.display = 'none';
         resetSession();
@@ -211,26 +245,26 @@ export function createRecommenderView() {
         }
     });
 
-    const handlePassed = () => {
+    const handlePassed = (message) => {
         const currentSr = parseFloat(srInput.value);
         const newSr = (currentSr + 0.1).toFixed(1);
         srInput.value = newSr;
         localStorage.setItem('recommender_sr', newSr);
-        statusMessage.textContent = `Goal Passed! SR increased to ${srInput.value}!`;
+        statusMessage.textContent = message || `Goal Passed! SR increased to ${srInput.value}!`;
         resetView();
     };
-    passedButton.addEventListener('click', handlePassed);
+    passedButton.addEventListener('click', () => handlePassed());
 
-    const handleFailed = () => {
+    const handleFailed = (message) => {
         const currentSr = parseFloat(srInput.value);
         const newSr = (currentSr - 0.1).toFixed(1);
         srInput.value = newSr;
         localStorage.setItem('recommender_sr', newSr);
-        statusMessage.textContent = `SR decreased to ${srInput.value}. Try again.`;
+        statusMessage.textContent = message || `SR decreased to ${srInput.value}. Try again.`;
         resetView();
     };
-    failedButton.addEventListener('click', handleFailed);
-    skipButton.addEventListener('click', handleFailed);
+    failedButton.addEventListener('click', () => handleFailed());
+    skipButton.addEventListener('click', () => handleFailed());
 
     const pollScanProgress = (playerName) => {
         stopProgressPolling();
@@ -248,18 +282,39 @@ export function createRecommenderView() {
                         statusMessage.textContent = 'Scan complete. Checking latest play...';
                         const latestReplay = await getLatestReplay(playerName);
                         
-                        // Check if the latest play is the one we recommended
                         if (latestReplay && latestReplay.beatmap_md5 === currentRecommendation.md5_hash) {
                             const playMods = latestReplay.mods_used;
                             const sessionMods = currentRecommendation.mods;
-                            const playModsWithoutNF = playMods & ~1; // Bitwise NOT on 1 to create a mask that removes the NF bit
+                            const playModsWithoutNF = playMods & ~1;
 
                             if (playModsWithoutNF === sessionMods) {
-                                // For now, any valid detected play is a "pass"
-                                statusMessage.textContent = 'New play detected and validated! Goal passed.';
-                                handlePassed();
+                                // --- GOAL EVALUATION LOGIC ---
+                                const minAcc = parseFloat(goalAccInput.value) || null;
+                                const minScore = parseInt(goalScoreInput.value, 10) || null;
+                                const maxMisses = parseInt(goalMissesInput.value, 10);
+                                const playAcc = calculateAccuracy(latestReplay);
+                                
+                                let goalFailed = false;
+                                let failReason = '';
+
+                                if (minAcc !== null && playAcc < minAcc) {
+                                    goalFailed = true;
+                                    failReason = `Accuracy was ${playAcc.toFixed(2)}% (needed ${minAcc}%)`;
+                                } else if (minScore !== null && latestReplay.total_score < minScore) {
+                                    goalFailed = true;
+                                    failReason = `Score was ${latestReplay.total_score.toLocaleString()} (needed ${minScore.toLocaleString()})`;
+                                } else if (!isNaN(maxMisses) && latestReplay.num_misses > maxMisses) {
+                                    goalFailed = true;
+                                    failReason = `Misses were ${latestReplay.num_misses} (max allowed ${maxMisses})`;
+                                }
+
+                                if (goalFailed) {
+                                    handleFailed(`Play detected, but goal failed: ${failReason}.`);
+                                } else {
+                                    handlePassed('New play detected and all goals passed!');
+                                }
                             } else {
-                                statusMessage.textContent = `Play detected, but mods don't match session. (Played with ${playMods}, expected ${sessionMods})`;
+                                statusMessage.textContent = `Play detected, but mods don't match session.`;
                                 setFeedbackButtonsDisabled(false);
                             }
                         } else {
