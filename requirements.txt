@@ -1,5 +1,5 @@
 Flask
-Flask-Cors
+Flask-Cors==6.0.0
 python-dotenv
 rosu-pp-py
 pyinstaller
