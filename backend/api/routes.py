@@ -212,8 +212,12 @@ def save_config():
     if not data:
         return jsonify({"error": "Invalid request body"}), 400
     try:
-        if 'osu_folder' in data: set_key(env_path, "OSU_FOLDER", data['osu_folder'])
-        if 'default_player' in data: set_key(env_path, "DEFAULT_PLAYER", data['default_player'])
+        if 'osu_folder' in data:
+            # Normalize path separators to forward slashes for consistency
+            osu_folder_path = data['osu_folder'].replace('\\', '/')
+            set_key(env_path, "OSU_FOLDER", osu_folder_path)
+        if 'default_player' in data:
+            set_key(env_path, "DEFAULT_PLAYER", data['default_player'])
         load_dotenv(dotenv_path=env_path, override=True)
         return jsonify({"message": "Configuration saved successfully."})
     except Exception as e:
