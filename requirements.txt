@@ -2,10 +2,8 @@ Flask
 Flask-Cors==6.0.0
 python-dotenv
 rosu-pp-py
-pyinstaller
 waitress==3.0.1
 pywebview
 watchdog
-setuptools==7.0.0
 zipp==3.19.1
 werkzeug==3.0.3
