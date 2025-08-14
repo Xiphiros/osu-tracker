@@ -155,8 +155,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function switchView(viewName) {
         stopAudio();
-        // Don't clear status message on view switch, it's global now
-        // document.getElementById('status-message').textContent = '';
         navLinks.forEach(link => link.classList.remove('active'));
 
         for (const key in views) {
@@ -203,21 +201,29 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     mainContent.addEventListener('datachanged', async () => {
-        // This log is still useful for general event tracking, but less noisy.
-        console.log('datachanged event received, refreshing active view...');
-        const config = await getConfig();
-        const playersBefore = Array.from(document.querySelectorAll('#player-selector option')).map(o => o.value);
+        console.log('datachanged event received, refreshing...');
+        
+        // Check if players existed *before* we refresh the list
+        const playersExistBefore = document.getElementById('player-selector') !== null;
         
         await populatePlayerSelector();
-        const playersAfter = Array.from(document.querySelectorAll('#player-selector option')).map(o => o.value);
 
-        // If the default player was not set and now we have players, set it.
-        if (!currentPlayer && playersAfter.length > 1) { // >1 to exclude "-- Select --"
+        // Check if players exist *after* the refresh
+        const playersExistAfter = document.getElementById('player-selector') !== null;
+
+        // If we just went from no players to having players, auto-navigate
+        if (!playersExistBefore && playersExistAfter) {
             const config = await getConfig();
-            currentPlayer = config.default_player || playersAfter[1]; // Use default or first real player
-            document.getElementById('player-selector').value = currentPlayer;
+            const players = await getPlayers();
+            currentPlayer = config.default_player || players[0];
+            if (document.getElementById('player-selector')) {
+                document.getElementById('player-selector').value = currentPlayer;
+            }
+            switchView('profile');
+            return; // Stop here to prevent refreshing the old view
         }
         
+        // If players already existed, just refresh the current view
         const activeView = mainContent.querySelector('.view[style*="display: block"]');
         if (activeView) {
             const viewName = activeView.dataset.viewName;
