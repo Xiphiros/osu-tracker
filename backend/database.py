@@ -4,6 +4,7 @@ import json
 import os
 from dotenv import load_dotenv
 import rosu_pp_py
+from utils import get_safe_join
 
 DATABASE_FILE = 'osu_tracker.db'
 
@@ -655,10 +656,10 @@ def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[], focus=None):
         return beatmap
 
     songs_path = os.path.join(osu_folder, 'Songs')
-    osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
+    osu_file_path = get_safe_join(songs_path, beatmap.get('folder_name'), beatmap.get('osu_file_name'))
 
-    if not os.path.exists(osu_file_path):
-        logging.warning(f"Could not find .osu file for recommended map: {osu_file_path}")
+    if not osu_file_path or not os.path.exists(osu_file_path):
+        logging.warning(f"Could not find .osu file for recommended map: {beatmap.get('osu_file_name')}")
         return beatmap
 
     try:
