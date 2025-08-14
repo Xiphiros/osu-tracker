@@ -84,7 +84,8 @@ def sync_local_beatmaps_task():
         progress['message'] = 'Reading beatmap library (osu!.db)...'
         all_beatmap_data = parser.parse_osu_db(db_path)
         all_beatmap_items = list(all_beatmap_data.items())
-        progress['total'] = len(all_beatmap_items)
+        total_to_process = sum(1 for _, b in all_beatmap_items if b.get('game_mode') == 0)
+        progress['total'] = total_to_process
         
         with concurrent.futures.ThreadPoolExecutor() as executor:
             # Process beatmaps in chunks to manage memory
@@ -100,7 +101,6 @@ def sync_local_beatmaps_task():
                             tasks.append((osu_file_path, beatmap.get('bpm', 0), md5))
 
                 if not tasks:
-                    progress['current'] += len(chunk_items)
                     continue
 
                 future_to_md5 = {executor.submit(process_osu_file_and_cache, path, bpm, md5): md5 for path, bpm, md5 in tasks}
@@ -122,6 +122,7 @@ def sync_local_beatmaps_task():
                         logging.error(f"Error processing future for {beatmap_name}: {e}", exc_info=True)
 
                 # Save the processed chunk to the database
+                progress['message'] = f"Writing a batch of {len(chunk_data)} beatmaps to the database..."
                 database.add_or_update_beatmaps(chunk_data)
                 if all_mod_caches:
                     database.add_beatmap_mod_cache(all_mod_caches)
@@ -192,7 +193,7 @@ def scan_replays_task():
             database.add_replays_batch(replay_batch)
         
         progress['status'] = 'complete'
-        progress['message'] = f"Scan complete! Processed {progress['total']} new replays."
+        progress['message'] = f"Scan complete! All {progress['total']} local replays have been processed."
     except Exception as e:
         logging.error(f"Error in scan task: {e}", exc_info=True)
         progress['status'] = 'error'
