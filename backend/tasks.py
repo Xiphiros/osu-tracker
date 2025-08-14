@@ -71,7 +71,7 @@ def sync_local_beatmaps_task():
     progress['message'] = 'Starting beatmap sync...'
     progress['batches_done'] = 0
     
-    BATCH_SIZE = 500  # Define batch size for DB writes and in-memory processing
+    BATCH_SIZE = 500  # Define batch size for DB writes
 
     try:
         osu_folder = os.getenv('OSU_FOLDER')
@@ -85,26 +85,29 @@ def sync_local_beatmaps_task():
         progress['message'] = 'Reading beatmap library (osu!.db)...'
         all_beatmap_data = parser.parse_osu_db(db_path)
         
+        # --- Initial write of all basic beatmap info ---
+        progress['message'] = 'Saving basic beatmap metadata...'
+        database.add_or_update_beatmaps(all_beatmap_data)
+        progress['batches_done'] += 1 # Signal to frontend that basic data is available
+
         progress['message'] = 'Checking for previously analyzed beatmaps...'
         processed_md5s = database.get_processed_beatmap_hashes()
         
-        all_beatmap_items = list(all_beatmap_data.items())
-        
-        # Determine which beatmaps actually need the expensive processing
         items_to_process = [
-            (md5, data) for md5, data in all_beatmap_items 
+            (md5, data) for md5, data in all_beatmap_data.items() 
             if md5 not in processed_md5s and data.get('game_mode') == 0
         ]
         progress['total'] = len(items_to_process)
 
         if progress['total'] == 0:
-            progress['message'] = 'Updating existing beatmap metadata...'
-            database.add_or_update_beatmaps(all_beatmap_data)
             progress['status'] = 'complete'
             progress['message'] = 'No new beatmaps to analyze. Your library is up to date.'
             return
             
         progress['message'] = f"Found {progress['total']} new beatmaps to analyze..."
+
+        processed_batch = {}
+        mod_cache_batch = []
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             tasks = []
@@ -120,18 +123,32 @@ def sync_local_beatmaps_task():
                 try:
                     md5, result_data, mod_caches = future.result()
                     if result_data:
-                        all_beatmap_data[md5].update(result_data)
+                        # The original data is already in all_beatmap_data
+                        current_beatmap_data = all_beatmap_data[md5]
+                        current_beatmap_data.update(result_data)
+                        processed_batch[md5] = current_beatmap_data
                     if mod_caches:
-                        # This part is tricky as we're not batching this specific write.
-                        # For simplicity, we can collect and write at the end, or write per future.
-                        # Writing per future is less efficient but simpler to integrate.
-                        database.add_beatmap_mod_cache(mod_caches)
+                        mod_cache_batch.extend(mod_caches)
+                    
+                    # When batch is full, write to DB and reset
+                    if len(processed_batch) >= BATCH_SIZE:
+                        progress['message'] = f"Saving batch of {len(processed_batch)} analyzed beatmaps..."
+                        database.add_or_update_beatmaps(processed_batch)
+                        database.add_beatmap_mod_cache(mod_cache_batch)
+                        progress['batches_done'] += 1
+                        processed_batch = {}
+                        mod_cache_batch = []
+
                 except Exception as e:
                     logging.error(f"Error processing a beatmap future: {e}", exc_info=True)
 
-        progress['message'] = 'Saving all beatmap data to the database...'
-        database.add_or_update_beatmaps(all_beatmap_data)
-        progress['batches_done'] += 1 # Signal a refresh
+        # Write any remaining items in the final batch
+        if processed_batch:
+            progress['message'] = 'Saving final batch of analyzed beatmaps...'
+            database.add_or_update_beatmaps(processed_batch)
+            progress['batches_done'] += 1 # Signal a final refresh
+        if mod_cache_batch:
+            database.add_beatmap_mod_cache(mod_cache_batch)
         
         progress['status'] = 'complete'
         progress['message'] = 'Sync complete! Your beatmap library is up to date.'
