@@ -6,3 +6,4 @@ pyinstaller
 waitress
 pywebview
 watchdog
+setuptools==70.0.0
