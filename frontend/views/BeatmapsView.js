@@ -36,25 +36,25 @@ export async function loadBeatmaps(viewElement, page = 1, searchTerm = currentSe
     const searchInput = viewElement.querySelector('#beatmaps-search');
     const statusMessage = document.getElementById('status-message');
 
-    // Disable search during sync, but still allow viewing
     try {
         const progress = await getProgressStatus();
         searchInput.disabled = progress.sync.status === 'running';
     } catch (e) {
-         statusMessage.textContent = 'Could not get task status. Loading may be incomplete.';
+         console.warn('Could not get task status for UI update.');
     }
 
     currentSearchTerm = searchTerm;
     statusMessage.textContent = 'Loading beatmap data...';
-
-    // Set a loading state, but don't clear content until we have a successful response
-    // This prevents a blank screen if the API call fails during a refresh.
-    container.style.opacity = '0.5';
+    
+    // Only show a "Loading..." message if the container is currently empty
+    if (container.innerHTML === '') {
+        container.innerHTML = '<p>Loading...</p>';
+    }
 
     try {
         const response = await getBeatmaps(page, 50, searchTerm);
         
-        // On success, clear the containers before rendering new content.
+        // Always clear containers on successful fetch before rendering new content
         container.innerHTML = '';
         paginationContainer.innerHTML = '';
 
@@ -63,15 +63,20 @@ export async function loadBeatmaps(viewElement, page = 1, searchTerm = currentSe
         const start = Math.min((page - 1) * 50 + 1, total);
         const end = Math.min(start + beatmaps.length - 1, total);
         
-        const currentStatus = (await getProgressStatus()).sync;
-        if (currentStatus.status !== 'running') {
+        const currentProgress = await getProgressStatus();
+        if (currentProgress.sync.status !== 'running') {
              statusMessage.textContent = total > 0 ? `Displaying ${start}-${end} of ${total} beatmaps.` : 'No beatmaps found. Try scanning or adjusting your search.';
         }
 
-        beatmaps.forEach(beatmap => {
-            const card = createBeatmapCard(beatmap);
-            container.appendChild(card);
-        });
+        if (beatmaps.length === 0 && total > 0) {
+            container.innerHTML = '<p>No beatmaps match the current search or page.</p>';
+        } else {
+            beatmaps.forEach(beatmap => {
+                const card = createBeatmapCard(beatmap);
+                container.appendChild(card);
+            });
+        }
+
 
         if (total > 0) {
             renderPagination(paginationContainer, page, total, 50, (newPage) => {
@@ -82,8 +87,9 @@ export async function loadBeatmaps(viewElement, page = 1, searchTerm = currentSe
     } catch (error) {
         console.error('Error fetching beatmap data:', error);
         statusMessage.textContent = error.message;
-        // Do not clear the container on error, so the user can still see the old data.
-    } finally {
-        container.style.opacity = '1';
+        // Show error only if the container would otherwise be empty
+        if (container.innerHTML === '' || container.innerHTML === '<p>Loading...</p>') {
+            container.innerHTML = `<p>Error: ${error.message}</p>`;
+        }
     }
 }
