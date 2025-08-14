@@ -1,5 +1,16 @@
 const API_BASE_URL = '/api'; // Use a relative path
 
+/**
+ * Appends a cache-busting query parameter to a URL.
+ * @param {string} url The URL to modify.
+ * @returns {string} The URL with a cache-busting parameter.
+ */
+const addCacheBust = (url) => {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}_=${new Date().getTime()}`;
+};
+
+
 export const getReplays = async (playerName = null, page = 1, limit = 50, searchTerm = null) => {
     let url = `${API_BASE_URL}/replays?page=${page}&limit=${limit}`;
     if (playerName) {
@@ -8,7 +19,7 @@ export const getReplays = async (playerName = null, page = 1, limit = 50, search
     if (searchTerm) {
         url += `&search=${encodeURIComponent(searchTerm)}`;
     }
-    const response = await fetch(url);
+    const response = await fetch(addCacheBust(url));
     if (!response.ok) {
         throw new Error('Failed to fetch replays. Is the backend server running?');
     }
@@ -17,7 +28,8 @@ export const getReplays = async (playerName = null, page = 1, limit = 50, search
 
 export const getLatestReplay = async (playerName) => {
     if (!playerName) throw new Error("Player name is required.");
-    const response = await fetch(`${API_BASE_URL}/replays/latest?player_name=${encodeURIComponent(playerName)}`);
+    const url = `${API_BASE_URL}/replays/latest?player_name=${encodeURIComponent(playerName)}`;
+    const response = await fetch(addCacheBust(url));
     if (response.status === 404) {
         return null;
     }
@@ -28,7 +40,7 @@ export const getLatestReplay = async (playerName) => {
 };
 
 export const getPlayers = async () => {
-    const response = await fetch(`${API_BASE_URL}/players`);
+    const response = await fetch(addCacheBust(`${API_BASE_URL}/players`));
     if (!response.ok) {
         throw new Error('Failed to fetch players.');
     }
@@ -36,7 +48,8 @@ export const getPlayers = async () => {
 };
 
 export const getPlayerStats = async (playerName) => {
-    const response = await fetch(`${API_BASE_URL}/players/${encodeURIComponent(playerName)}/stats`);
+    const url = `${API_BASE_URL}/players/${encodeURIComponent(playerName)}/stats`;
+    const response = await fetch(addCacheBust(url));
     if (!response.ok) {
         throw new Error('Failed to fetch player stats.');
     }
@@ -62,7 +75,8 @@ export const syncBeatmaps = async () => {
 };
 
 export const getProgressStatus = async () => {
-    const response = await fetch(`${API_BASE_URL}/progress-status`);
+    // This one is polled constantly, so cache-busting isn't strictly necessary but is good practice.
+    const response = await fetch(addCacheBust(`${API_BASE_URL}/progress-status`));
     if (!response.ok) {
         throw new Error('Failed to fetch progress status.');
     }
@@ -79,7 +93,7 @@ export const getBeatmaps = async (page = 1, limit = 50, searchTerm = null) => {
     if (searchTerm) {
         url += `&search=${encodeURIComponent(searchTerm)}`;
     }
-    const response = await fetch(url);
+    const response = await fetch(addCacheBust(url));
     if (!response.ok) {
         throw new Error('Failed to fetch beatmaps.');
     }
@@ -94,7 +108,7 @@ export const getRecommendation = async (sr, bpm, mods = 0, exclude = [], focus =
     if (focus) {
         url += `&focus=${focus}`;
     }
-    const response = await fetch(url);
+    const response = await fetch(addCacheBust(url));
     if (response.status === 404) {
         return null; // This is an expected outcome if no map is found
     }
@@ -120,7 +134,7 @@ export const getSuggestedSr = async (playerName, params) => {
         url += `?${queryString}`;
     }
 
-    const response = await fetch(url);
+    const response = await fetch(addCacheBust(url));
     if (response.status === 404) {
         const data = await response.json();
         throw new Error(data.message || 'No matching plays found.');
@@ -133,7 +147,7 @@ export const getSuggestedSr = async (playerName, params) => {
 };
 
 export const getConfig = async () => {
-    const response = await fetch(`${API_BASE_URL}/config`);
+    const response = await fetch(addCacheBust(`${API_BASE_URL}/config`));
     if (!response.ok) {
         throw new Error('Failed to fetch configuration.');
     }
