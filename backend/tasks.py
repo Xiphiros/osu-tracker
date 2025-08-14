@@ -97,17 +97,13 @@ def sync_local_beatmaps_task():
             (md5, data) for md5, data in all_beatmap_data.items() 
             if md5 not in processed_md5s and data.get('game_mode') == 0
         ]
-        progress['total'] = len(items_to_process)
-
-        if progress['total'] == 0:
+        
+        if len(items_to_process) == 0:
             progress['status'] = 'complete'
             progress['message'] = 'No new beatmaps to analyze. Your library is up to date.'
             return
             
-        progress['message'] = f"Found {progress['total']} new beatmaps to analyze..."
-
-        processed_batch = {}
-        mod_cache_batch = []
+        progress['message'] = f"Found {len(items_to_process)} new beatmaps. Verifying files..."
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             tasks = []
@@ -117,22 +113,28 @@ def sync_local_beatmaps_task():
                     if os.path.exists(osu_file_path):
                         tasks.append(executor.submit(process_osu_file_and_cache, osu_file_path, beatmap.get('bpm', 0), md5))
 
+            # Update total to the actual number of files we will process
+            progress['total'] = len(tasks)
+            progress['current'] = 0
+            progress['message'] = f"Analyzing {progress['total']} beatmaps..."
+
+            processed_batch = {}
+            mod_cache_batch = []
+
             for future in concurrent.futures.as_completed(tasks):
                 progress['current'] += 1
-                progress['message'] = f"Analyzing new beatmaps ({progress['current']}/{progress['total']})..."
+                progress['message'] = f"Analyzing: {progress['current']}/{progress['total']}"
                 try:
                     md5, result_data, mod_caches = future.result()
                     if result_data:
-                        # The original data is already in all_beatmap_data
                         current_beatmap_data = all_beatmap_data[md5]
                         current_beatmap_data.update(result_data)
                         processed_batch[md5] = current_beatmap_data
                     if mod_caches:
                         mod_cache_batch.extend(mod_caches)
                     
-                    # When batch is full, write to DB and reset
                     if len(processed_batch) >= BATCH_SIZE:
-                        progress['message'] = f"Saving batch of {len(processed_batch)} analyzed beatmaps..."
+                        progress['message'] = f"Saving batch to database... ({progress['current']}/{progress['total']})"
                         database.add_or_update_beatmaps(processed_batch)
                         database.add_beatmap_mod_cache(mod_cache_batch)
                         progress['batches_done'] += 1
@@ -142,11 +144,10 @@ def sync_local_beatmaps_task():
                 except Exception as e:
                     logging.error(f"Error processing a beatmap future: {e}", exc_info=True)
 
-        # Write any remaining items in the final batch
         if processed_batch:
-            progress['message'] = 'Saving final batch of analyzed beatmaps...'
+            progress['message'] = 'Saving final batch...'
             database.add_or_update_beatmaps(processed_batch)
-            progress['batches_done'] += 1 # Signal a final refresh
+            progress['batches_done'] += 1
         if mod_cache_batch:
             database.add_beatmap_mod_cache(mod_cache_batch)
         
