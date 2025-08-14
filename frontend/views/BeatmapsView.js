@@ -36,36 +36,42 @@ export async function loadBeatmaps(viewElement, page = 1, searchTerm = currentSe
     const searchInput = viewElement.querySelector('#beatmaps-search');
     const statusMessage = document.getElementById('status-message');
 
-    // Check progress status first
+    // Disable search during sync, but still allow viewing
     try {
         const progress = await getProgressStatus();
-        if (progress.sync.status === 'running') {
-            container.innerHTML = `<p>Beatmap sync in progress. This view will refresh automatically when it's complete.</p>`;
-            paginationContainer.innerHTML = '';
-            searchInput.disabled = true;
-            statusMessage.textContent = `Syncing: ${progress.sync.current}/${progress.sync.total || '?'}`;
-            return; // Abort loading
-        }
+        searchInput.disabled = progress.sync.status === 'running';
     } catch (e) {
-        // If progress check fails, still try to load maps but show a warning
-        statusMessage.textContent = 'Could not get task status. Attempting to load beatmaps...';
+         statusMessage.textContent = 'Could not get task status. Loading may be incomplete.';
     }
 
-    searchInput.disabled = false;
     currentSearchTerm = searchTerm;
     statusMessage.textContent = 'Loading beatmap data...';
-    container.innerHTML = '';
-    paginationContainer.innerHTML = '';
+
+    // Don't clear the container if we are just refreshing during a sync on page 1
+    const isRefreshingSync = searchInput.disabled && page === 1;
+    if (!isRefreshingSync) {
+        container.innerHTML = '';
+        paginationContainer.innerHTML = '';
+    }
 
     try {
         const response = await getBeatmaps(page, 50, searchTerm);
         const { beatmaps, total } = response;
+        
+        // If we are refreshing, clear the old content before adding the new
+        if (isRefreshingSync) {
+            container.innerHTML = '';
+            paginationContainer.innerHTML = '';
+        }
 
         const start = Math.min((page - 1) * 50 + 1, total);
         const end = Math.min(start + beatmaps.length - 1, total);
-
-        statusMessage.textContent = total > 0 ? `Displaying ${start}-${end} of ${total} beatmaps.` : 'No beatmaps found. Try scanning or adjusting your search.';
         
+        const currentStatus = (await getProgressStatus()).sync;
+        if (currentStatus.status !== 'running') {
+             statusMessage.textContent = total > 0 ? `Displaying ${start}-${end} of ${total} beatmaps.` : 'No beatmaps found. Try scanning or adjusting your search.';
+        }
+
         beatmaps.forEach(beatmap => {
             const card = createBeatmapCard(beatmap);
             container.appendChild(card);
