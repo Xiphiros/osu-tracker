@@ -45,6 +45,7 @@ function stopGlobalProgressPolling() {
 async function pollProgress() {
     try {
         const progress = await getProgressStatus();
+        console.log("Poll received:", JSON.parse(JSON.stringify(progress))); // Detailed log
         
         document.dispatchEvent(new CustomEvent('progressupdated', { detail: progress }));
         updateGlobalStatus(progress);
@@ -70,7 +71,7 @@ async function pollProgress() {
         }
 
         if (shouldRefresh) {
-            console.log('Detected data change from polling, dispatching event.');
+            console.log('Detected data change from polling, dispatching datachanged event.');
             document.dispatchEvent(new CustomEvent('datachanged', { bubbles: true }));
         }
 
