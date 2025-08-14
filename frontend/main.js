@@ -202,7 +202,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     mainContent.addEventListener('datachanged', async () => {
         console.log('Data changed event received, refreshing...');
+
+        // If no player is selected (e.g., on first scan), update the state.
+        if (!currentPlayer) {
+            const players = await getPlayers();
+            if (players.length > 0) {
+                const config = await getConfig();
+                currentPlayer = config.default_player || players[0];
+            }
+        }
         
+        // Now that the state is correct, populate the UI.
         await populatePlayerSelector();
         
         // Refresh the current view to reflect any new data
