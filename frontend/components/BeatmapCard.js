@@ -39,7 +39,8 @@ export function createBeatmapCard(beatmap) {
     card.innerHTML = `
         <div class="card-content-wrapper">
             <div class="card-info">
-                <button class="play-button">▶</button>
+                <button class="play-button" title="Preview Audio">▶</button>
+                <button class="copy-button" title="Copy Search String">📋</button>
                 <div class="card-text-content">
                     <h3 class="card-title" title="${beatmap.artist} - ${beatmap.title}">${beatmap.artist || 'Unknown Artist'} - ${beatmap.title || 'Unknown Title'}</h3>
                     <p class="card-subtitle" title="[${beatmap.difficulty}] mapped by ${beatmap.creator}">[${beatmap.difficulty || '?'}] by ${beatmap.creator || 'Unknown Mapper'}</p>
@@ -73,6 +74,23 @@ export function createBeatmapCard(beatmap) {
     } else {
         playButton.disabled = true;
     }
+
+    const copyButton = card.querySelector('.copy-button');
+    copyButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const searchString = `${beatmap.artist} ${beatmap.title} ${beatmap.difficulty} ${beatmap.creator}`;
+        navigator.clipboard.writeText(searchString).then(() => {
+            const originalText = copyButton.textContent;
+            copyButton.textContent = '✅';
+            setTimeout(() => {
+                copyButton.textContent = originalText;
+            }, 1500);
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+            // You could add an error state here, e.g., showing a '❌' icon.
+        });
+    });
+
 
     return card;
 }
