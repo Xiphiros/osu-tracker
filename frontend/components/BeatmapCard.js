@@ -1,9 +1,16 @@
 import { getSongFileUrl } from '../services/api.js';
 import { playAudio } from '../utils/audioPlayer.js';
 
+// Helper function to create an element with classes and text content securely
+function createElement(tag, classNames = [], textContent = '') {
+    const el = document.createElement(tag);
+    if (classNames.length) el.classList.add(...classNames);
+    if (textContent) el.textContent = textContent;
+    return el;
+}
+
 export function createBeatmapCard(beatmap) {
-    const card = document.createElement('div');
-    card.className = 'beatmap-card';
+    const card = createElement('div', ['beatmap-card']);
 
     if (beatmap.folder_name && beatmap.background_file) {
         const imageUrl = getSongFileUrl(beatmap.folder_name, beatmap.background_file);
@@ -27,44 +34,67 @@ export function createBeatmapCard(beatmap) {
         bpmText = 'N/A';
     }
 
+    // --- Build DOM manually to prevent XSS ---
+    const wrapper = createElement('div', ['card-content-wrapper']);
+    const cardInfo = createElement('div', ['card-info']);
+
+    const playButton = createElement('button', ['play-button'], '▶');
+    playButton.title = 'Preview Audio';
+
+    const copyButton = createElement('button', ['copy-button'], '📋');
+    copyButton.title = 'Copy Search String';
+
+    const textContentDiv = createElement('div', ['card-text-content']);
+    const title = createElement('h3', ['card-title'], `${beatmap.artist || 'Unknown Artist'} - ${beatmap.title || 'Unknown Title'}`);
+    title.title = `${beatmap.artist} - ${beatmap.title}`;
+    const subtitle = createElement('p', ['card-subtitle'], `[${beatmap.difficulty || '?'}] by ${beatmap.creator || 'Unknown Mapper'}`);
+    subtitle.title = `[${beatmap.difficulty}] mapped by ${beatmap.creator}`;
+    textContentDiv.append(title, subtitle);
+
+    cardInfo.append(playButton, copyButton, textContentDiv);
+
+    const cardStats = createElement('div', ['card-stats']);
+    const createStatItem = (label, value, titleAttr) => {
+        const item = createElement('div', ['stat-item']);
+        item.title = titleAttr;
+        const labelSpan = createElement('span', ['label'], label);
+        const valueSpan = createElement('span', ['value'], value);
+        item.append(labelSpan, valueSpan);
+        return item;
+    };
+    cardStats.append(
+        createStatItem('CS', beatmap.cs, 'Circle Size'),
+        createStatItem('AR', beatmap.ar, 'Approach Rate'),
+        createStatItem('OD', beatmap.od, 'Overall Difficulty'),
+        createStatItem('HP', beatmap.hp, 'HP Drain')
+    );
+
+    const footerStats = createElement('div', ['card-footer-stats']);
+    const starsStat = createStatItem('★', starsText, 'Star Rating');
+    footerStats.appendChild(starsStat);
+
     const aimValue = beatmap.aim ? beatmap.aim.toFixed(2) : null;
     const speedValue = beatmap.speed ? beatmap.speed.toFixed(2) : null;
-    let skillHtml = '';
     if (aimValue && speedValue) {
-        skillHtml += `<div class="stat-item stat-aim" title="Aim Difficulty"><span class="label">🎯</span><span class="value">${aimValue}</span></div>`;
-        skillHtml += `<div class="stat-item stat-speed" title="Speed Difficulty"><span class="label">⚡</span><span class="value">${speedValue}</span></div>`;
+        const aimStat = createStatItem('🎯', aimValue, 'Aim Difficulty');
+        aimStat.classList.add('stat-aim');
+        const speedStat = createStatItem('⚡', speedValue, 'Speed Difficulty');
+        speedStat.classList.add('stat-speed');
+        footerStats.append(aimStat, speedStat);
     }
 
+    const bpmStat = createStatItem('♫', bpmText, 'Beats Per Minute');
+    footerStats.appendChild(bpmStat);
+    cardStats.appendChild(footerStats);
 
-    card.innerHTML = `
-        <div class="card-content-wrapper">
-            <div class="card-info">
-                <button class="play-button" title="Preview Audio">▶</button>
-                <button class="copy-button" title="Copy Search String">📋</button>
-                <div class="card-text-content">
-                    <h3 class="card-title" title="${beatmap.artist} - ${beatmap.title}">${beatmap.artist || 'Unknown Artist'} - ${beatmap.title || 'Unknown Title'}</h3>
-                    <p class="card-subtitle" title="[${beatmap.difficulty}] mapped by ${beatmap.creator}">[${beatmap.difficulty || '?'}] by ${beatmap.creator || 'Unknown Mapper'}</p>
-                </div>
-            </div>
-            <div class="card-stats">
-                <div class="stat-item" title="Circle Size"><span class="label">CS</span><span class="value">${beatmap.cs}</span></div>
-                <div class="stat-item" title="Approach Rate"><span class="label">AR</span><span class="value">${beatmap.ar}</span></div>
-                <div class="stat-item" title="Overall Difficulty"><span class="label">OD</span><span class="value">${beatmap.od}</span></div>
-                <div class="stat-item" title="HP Drain"><span class="label">HP</span><span class="value">${beatmap.hp}</span></div>
-                <div class="card-footer-stats">
-                    <div class="stat-item" title="Star Rating"><span class="label">★</span><span class="value">${starsText}</span></div>
-                    ${skillHtml}
-                    <div class="stat-item" title="Beats Per Minute"><span class="label">♫</span><span class="value">${bpmText}</span></div>
-                </div>
-            </div>
-        </div>
-    `;
+    wrapper.append(cardInfo, cardStats);
+    card.appendChild(wrapper);
 
-    const playButton = card.querySelector('.play-button');
+    // --- Event Listeners ---
     if (beatmap.folder_name && beatmap.audio_file) {
         const audioUrl = getSongFileUrl(beatmap.folder_name, beatmap.audio_file);
         playButton.addEventListener('click', (e) => {
-            e.stopPropagation(); // prevent any card-level click events
+            e.stopPropagation();
             playAudio(
                 audioUrl,
                 () => { playButton.textContent = '❚❚'; }, // onPlay
@@ -75,7 +105,6 @@ export function createBeatmapCard(beatmap) {
         playButton.disabled = true;
     }
 
-    const copyButton = card.querySelector('.copy-button');
     copyButton.addEventListener('click', (e) => {
         e.stopPropagation();
         const searchString = `${beatmap.artist} ${beatmap.title} ${beatmap.difficulty} ${beatmap.creator}`;
@@ -87,10 +116,8 @@ export function createBeatmapCard(beatmap) {
             }, 1500);
         }).catch(err => {
             console.error('Failed to copy text: ', err);
-            // You could add an error state here, e.g., showing a '❌' icon.
         });
     });
-
 
     return card;
 }
