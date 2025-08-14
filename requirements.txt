@@ -4,5 +4,5 @@ python-dotenv
 rosu-pp-py
 pyinstaller
 waitress
-pywebview[winforms]
+pywebview
 watchdog
