@@ -210,7 +210,11 @@ def scan_replays_task():
             progress['current'] = i + 1
             progress['message'] = f"Processing replays: {progress['current']}/{progress['total']}"
             
-            file_path = os.path.join(replays_path, file_name)
+            file_path = get_safe_join(replays_path, file_name)
+            if not file_path:
+                logging.warning(f"Skipping potentially malicious or invalid replay filename: {file_name}")
+                continue
+                
             try:
                 replay_data = parser.parse_replay_file(file_path)
                 if not replay_data or not replay_data.get('replay_md5'): continue
