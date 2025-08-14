@@ -6,6 +6,7 @@ from flask import jsonify
 import database
 import parser
 import rosu_pp_py
+from utils import get_safe_join
 
 # Global dictionary to track progress of background tasks.
 # status can be 'idle', 'running', 'complete', 'error'
@@ -110,10 +111,12 @@ def sync_local_beatmaps_task():
         verified_items = []
         for i, (md5, beatmap) in enumerate(items_to_process):
             progress['current'] = i + 1
-            if beatmap.get('folder_name') and beatmap.get('osu_file_name'):
-                osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
-                if os.path.exists(osu_file_path):
-                    verified_items.append((md5, beatmap, osu_file_path))
+            folder_name = beatmap.get('folder_name')
+            osu_file = beatmap.get('osu_file_name')
+            if folder_name and osu_file:
+                safe_path = get_safe_join(songs_path, folder_name, osu_file)
+                if safe_path and os.path.exists(safe_path):
+                    verified_items.append((md5, beatmap, safe_path))
 
         # --- Stage 2: Analysis ---
         progress['total'] = len(verified_items)
@@ -213,9 +216,12 @@ def scan_replays_task():
                 if not replay_data or not replay_data.get('replay_md5'): continue
                 
                 beatmap_info = all_beatmaps.get(replay_data['beatmap_md5'])
-                if beatmap_info and beatmap_info.get('folder_name') and beatmap_info.get('osu_file_name'):
-                    osu_file_path = os.path.join(songs_path, beatmap_info['folder_name'], beatmap_info['osu_file_name'])
-                    if os.path.exists(osu_file_path):
+                if beatmap_info:
+                    folder_name = beatmap_info.get('folder_name')
+                    osu_file = beatmap_info.get('osu_file_name')
+                    osu_file_path = get_safe_join(songs_path, folder_name, osu_file)
+                    
+                    if osu_file_path and os.path.exists(osu_file_path):
                         pp_info = parser.calculate_pp(osu_file_path, replay_data)
                         replay_data.update(pp_info)
                         osu_details = parser.parse_osu_file(osu_file_path)
