@@ -123,15 +123,14 @@ document.addEventListener('DOMContentLoaded', () => {
     
     mainContent.addEventListener('taskstarted', startGlobalProgressPolling);
 
-    async function populatePlayerSelector() {
+    function populatePlayerSelector(players, selectedPlayer) {
         try {
-            const players = await getPlayers();
             if (players.length > 0) {
                 const selector = document.createElement('select');
                 selector.id = 'player-selector';
                 selector.innerHTML = `<option value="">-- Select a Player --</option>`;
                 players.forEach(player => {
-                    const isSelected = player === currentPlayer;
+                    const isSelected = player === selectedPlayer;
                     selector.innerHTML += `<option value="${player}" ${isSelected ? 'selected' : ''}>${player}</option>`;
                 });
                 userSelectorContainer.innerHTML = '';
@@ -148,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 userSelectorContainer.innerHTML = '<p style="font-size: 0.8em; color: #aaa; text-align: center;">No players found. Please run a scan from the Config page.</p>';
             }
         } catch (error) {
-            console.error("Failed to load players:", error);
+            console.error("Failed to populate player selector:", error);
             userSelectorContainer.innerHTML = '<p style="font-size: 0.8em; color: #999;">Could not load players.</p>';
         }
     }
@@ -200,20 +199,25 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    mainContent.addEventListener('datachanged', async () => {
+    document.addEventListener('datachanged', async () => {
         console.log('Data changed event received, refreshing...');
 
-        // If no player is selected (e.g., on first scan), update the state.
-        if (!currentPlayer) {
-            const players = await getPlayers();
-            if (players.length > 0) {
-                const config = await getConfig();
-                currentPlayer = config.default_player || players[0];
+        const players = await getPlayers();
+
+        // Update current player state based on new player list
+        if (players.length > 0) {
+            const config = await getConfig();
+            const defaultPlayer = config.default_player;
+            // If current player is invalid or not set, pick a new one.
+            if (!currentPlayer || !players.includes(currentPlayer)) {
+                currentPlayer = (defaultPlayer && players.includes(defaultPlayer)) ? defaultPlayer : players[0];
             }
+        } else {
+            currentPlayer = null; // No players, so no current player.
         }
         
-        // Now that the state is correct, populate the UI.
-        await populatePlayerSelector();
+        // Now that the state is correct, populate the main UI selector.
+        populatePlayerSelector(players, currentPlayer);
         
         // Refresh the current view to reflect any new data
         const activeView = mainContent.querySelector('.view[style*="display: block"]');
@@ -238,19 +242,23 @@ document.addEventListener('DOMContentLoaded', () => {
             startGlobalProgressPolling();
         }
 
-        const config = await getConfig();
-        currentPlayer = config.default_player;
-        await populatePlayerSelector();
-        
         const players = await getPlayers();
-        if (currentPlayer) {
-            switchView('profile');
-        } else if (players.length > 0) {
-            // If no default is set, pick the first player and show their profile
-            currentPlayer = players[0];
-            document.getElementById('player-selector').value = currentPlayer;
+        const config = await getConfig();
+        
+        populatePlayerSelector(players, config.default_player);
+
+        if (players.length > 0) {
+            const defaultPlayer = config.default_player;
+            currentPlayer = (defaultPlayer && players.includes(defaultPlayer)) ? defaultPlayer : players[0];
+            
+            // Ensure the selector reflects the actual current player
+            const selector = document.getElementById('player-selector');
+            if (selector) selector.value = currentPlayer;
+
             switchView('profile');
         } else {
+            // If no players in DB, always go to config page
+            currentPlayer = null;
             switchView('config');
         }
     }
