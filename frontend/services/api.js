@@ -156,22 +156,15 @@ export const saveConfig = async (configData) => {
 };
 
 export const exportData = async () => {
-    const response = await fetch(`${API_BASE_URL}/data/export`);
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to export data.');
-    }
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = url;
-    a.download = 'osu_tracker_backup.db';
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    a.remove();
-    return { message: "Export started." };
+    // We can't easily fetch and then download in pywebview due to security contexts.
+    // Instead, we navigate to the download link directly. The backend's 'Content-Disposition'
+    // header will trigger the webview's native download handler.
+    window.location.href = `${API_BASE_URL}/data/export`;
+    
+    // We can't get a response back from this navigation, so we optimistically
+    // assume the download has started. Error handling will rely on the user
+    // noticing the download didn't happen.
+    return { message: "Download initiated." };
 };
 
 export const importData = async (file) => {
