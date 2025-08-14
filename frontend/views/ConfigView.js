@@ -113,7 +113,6 @@ export function createConfigView() {
             <div class="data-actions">
                 <button id="export-data-button">Export Data</button>
                 <button id="import-data-button">Import Data</button>
-                <input type="file" id="import-file-input" accept=".db,application/x-sqlite3" style="display: none;">
             </div>
         </div>
     `;
@@ -151,6 +150,15 @@ export function createConfigView() {
         statusMessage.textContent = message;
         statusMessage.style.display = 'block';
         statusMessage.className = type;
+        
+        // Hide info messages after a delay
+        if (type === 'info') {
+            setTimeout(() => {
+                if (statusMessage.textContent === message) {
+                    statusMessage.style.display = 'none';
+                }
+            }, 4000);
+        }
     };
 
     saveButton.addEventListener('click', async () => {
@@ -198,46 +206,36 @@ export function createConfigView() {
 
     const exportButton = view.querySelector('#export-data-button');
     const importButton = view.querySelector('#import-data-button');
-    const importInput = view.querySelector('#import-file-input');
 
     exportButton.addEventListener('click', async () => {
-        setStatus('Exporting data...', 'info');
+        setStatus('Opening export dialog...', 'info');
         try {
-            await exportData();
-            setStatus('Data backup created successfully.', 'success');
+            const result = await exportData();
+            setStatus(result.message, result.status);
         } catch (error) {
             setStatus(`Export failed: ${error.message}`, 'error');
         }
     });
 
-    importButton.addEventListener('click', () => {
-        importInput.click();
-    });
-
-    importInput.addEventListener('change', async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
+    importButton.addEventListener('click', async () => {
         const allButtons = view.querySelectorAll('button');
         const allInputs = view.querySelectorAll('input, select');
         
-        allButtons.forEach(b => b.disabled = true);
-        allInputs.forEach(i => i.disabled = true);
-        setStatus('Importing data... Do not close the application.', 'info');
+        setStatus('Opening import dialog...', 'info');
 
         try {
-            const result = await importData(file);
-            setStatus(result.message, 'success');
-            // On success, leave controls disabled to encourage restart.
+            const result = await importData();
+            setStatus(result.message, result.status);
+
+            // If import was successful, disable controls to encourage a restart.
+            if (result.status === 'success') {
+                allButtons.forEach(b => b.disabled = true);
+                allInputs.forEach(i => i.disabled = true);
+            }
         } catch (error) {
             setStatus(`Import failed: ${error.message}`, 'error');
-            allButtons.forEach(b => b.disabled = false);
-            allInputs.forEach(i => i.disabled = false);
-        } finally {
-            importInput.value = ''; // Clear file input
         }
     });
-
 
     return view;
 }
