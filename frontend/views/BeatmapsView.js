@@ -89,7 +89,9 @@ export async function loadBeatmaps(viewElement, page = 1, searchTerm = currentSe
         statusMessage.textContent = error.message;
         // Show error only if the container would otherwise be empty
         if (container.innerHTML === '' || container.innerHTML === '<p>Loading...</p>') {
-            container.innerHTML = `<p>Error: ${error.message}</p>`;
+            const errorP = document.createElement('p');
+            errorP.textContent = `Error: ${error.message}`;
+            container.replaceChildren(errorP);
         }
     }
 }
