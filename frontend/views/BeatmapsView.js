@@ -47,23 +47,16 @@ export async function loadBeatmaps(viewElement, page = 1, searchTerm = currentSe
     currentSearchTerm = searchTerm;
     statusMessage.textContent = 'Loading beatmap data...';
 
-    // Don't clear the container if we are just refreshing during a sync on page 1
-    const isRefreshingSync = searchInput.disabled && page === 1;
-    if (!isRefreshingSync) {
-        container.innerHTML = '';
-        paginationContainer.innerHTML = '';
-    }
-
     try {
         const response = await getBeatmaps(page, 50, searchTerm);
+        
+        // On success, clear the containers before rendering new content.
+        // This prevents a blank screen if the API call fails during a refresh.
+        container.innerHTML = '';
+        paginationContainer.innerHTML = '';
+
         const { beatmaps, total } = response;
         
-        // If we are refreshing, clear the old content before adding the new
-        if (isRefreshingSync) {
-            container.innerHTML = '';
-            paginationContainer.innerHTML = '';
-        }
-
         const start = Math.min((page - 1) * 50 + 1, total);
         const end = Math.min(start + beatmaps.length - 1, total);
         
@@ -86,6 +79,6 @@ export async function loadBeatmaps(viewElement, page = 1, searchTerm = currentSe
     } catch (error) {
         console.error('Error fetching beatmap data:', error);
         statusMessage.textContent = error.message;
-        container.innerHTML = `<p>Error: ${error.message}</p>`;
+        // Do not clear the container on error, so the user can still see the old data.
     }
 }
