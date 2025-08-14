@@ -125,15 +125,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function populatePlayerSelector(players, selectedPlayer) {
         try {
+            userSelectorContainer.innerHTML = ''; // Clear the container first
+
             if (players.length > 0) {
                 const selector = document.createElement('select');
                 selector.id = 'player-selector';
-                selector.innerHTML = `<option value="">-- Select a Player --</option>`;
+                
+                // Add the default, non-selectable option
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = '-- Select a Player --';
+                selector.appendChild(defaultOption);
+
+                // Safely create and add an option for each player
                 players.forEach(player => {
-                    const isSelected = player === selectedPlayer;
-                    selector.innerHTML += `<option value="${player}" ${isSelected ? 'selected' : ''}>${player}</option>`;
+                    const option = document.createElement('option');
+                    option.value = player; // `value` property is safe from XSS
+                    option.textContent = player; // `textContent` sanitizes the input
+                    if (player === selectedPlayer) {
+                        option.selected = true;
+                    }
+                    selector.appendChild(option);
                 });
-                userSelectorContainer.innerHTML = '';
+
                 userSelectorContainer.appendChild(selector);
                 
                 selector.addEventListener('change', (e) => {
@@ -144,14 +158,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             } else {
-                userSelectorContainer.innerHTML = '<p style="font-size: 0.8em; color: #aaa; text-align: center;">No players found. Please run a scan from the Config page.</p>';
+                const p = document.createElement('p');
+                p.style.fontSize = '0.8em';
+                p.style.color = '#aaa';
+                p.style.textAlign = 'center';
+                p.textContent = 'No players found. Please run a scan from the Config page.';
+                userSelectorContainer.appendChild(p);
             }
         } catch (error) {
             console.error("Failed to populate player selector:", error);
-            userSelectorContainer.innerHTML = '<p style="font-size: 0.8em; color: #999;">Could not load players.</p>';
+            const p = document.createElement('p');
+            p.style.fontSize = '0.8em';
+            p.style.color = '#999';
+            p.textContent = 'Could not load players.';
+            userSelectorContainer.innerHTML = ''; // Clear first
+            userSelectorContainer.appendChild(p);
         }
     }
-
+    
     function switchView(viewName) {
         stopAudio();
         navLinks.forEach(link => link.classList.remove('active'));
