@@ -424,12 +424,16 @@ export function createRecommenderView() {
                 findButton.textContent = `Reroll (${MAX_REROLLS - rerollCount - 1} left)`;
             } else {
                 resultContainer.innerHTML = `<p>No new map found. Try adjusting the values.</p>`;
-                statusMessage.textContent = 'No new map found.';
+                    statusMessage.textContent = 'No new map found.';
                 findButton.textContent = 'Find a map';
                 lastSearchParams = null;
             }
         } catch (error) {
-            resultContainer.innerHTML = `<p class="error">${error.message}</p>`;
+            const errorP = document.createElement('p');
+            errorP.className = 'error';
+            errorP.textContent = error.message;
+            resultContainer.innerHTML = '';
+            resultContainer.appendChild(errorP);
             statusMessage.textContent = 'Error finding map.';
         } finally {
             findButton.disabled = (rerollCount + 1 >= MAX_REROLLS);
