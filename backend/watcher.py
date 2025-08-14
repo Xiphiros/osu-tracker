@@ -8,6 +8,7 @@ from watchdog.events import FileSystemEventHandler
 import database
 import parser
 from config import IS_BUNDLED
+from utils import get_safe_join
 
 # This will hold the pywebview window object once the app starts
 window = None
@@ -30,10 +31,13 @@ def process_new_replay(file_path):
             return
         
         beatmap_info = database.get_beatmap_by_md5(replay_data['beatmap_md5'])
-        if beatmap_info and beatmap_info.get('folder_name') and beatmap_info.get('osu_file_name'):
+        if beatmap_info:
+            folder_name = beatmap_info.get('folder_name')
+            osu_file = beatmap_info.get('osu_file_name')
             songs_path = os.path.join(osu_folder, 'Songs')
-            osu_file_path = os.path.join(songs_path, beatmap_info['folder_name'], beatmap_info['osu_file_name'])
-            if os.path.exists(osu_file_path):
+            osu_file_path = get_safe_join(songs_path, folder_name, osu_file)
+
+            if osu_file_path and os.path.exists(osu_file_path):
                 pp_info = parser.calculate_pp(osu_file_path, replay_data)
                 replay_data.update(pp_info)
                 osu_details = parser.parse_osu_file(osu_file_path)
