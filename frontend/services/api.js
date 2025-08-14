@@ -156,28 +156,19 @@ export const saveConfig = async (configData) => {
 };
 
 export const exportData = async () => {
-    // We can't easily fetch and then download in pywebview due to security contexts.
-    // Instead, we navigate to the download link directly. The backend's 'Content-Disposition'
-    // header will trigger the webview's native download handler.
-    window.location.href = `${API_BASE_URL}/data/export`;
-    
-    // We can't get a response back from this navigation, so we optimistically
-    // assume the download has started. Error handling will rely on the user
-    // noticing the download didn't happen.
-    return { message: "Download initiated." };
+    if (window.pywebview && window.pywebview.api) {
+        // This calls the export_database_dialog function in the Python Api class
+        return await window.pywebview.api.export_database_dialog();
+    } else {
+        throw new Error("This feature is only available in the desktop application.");
+    }
 };
 
-export const importData = async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const response = await fetch(`${API_BASE_URL}/data/import`, {
-        method: 'POST',
-        body: formData,
-    });
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to import data.');
+export const importData = async () => {
+    if (window.pywebview && window.pywebview.api) {
+        // This calls the import_database_dialog function in the Python Api class
+        return await window.pywebview.api.import_database_dialog();
+    } else {
+        throw new Error("This feature is only available in the desktop application.");
     }
-    return response.json();
 };
