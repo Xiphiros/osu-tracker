@@ -71,7 +71,7 @@ def sync_local_beatmaps_task():
     progress['message'] = 'Starting beatmap sync...'
     progress['batches_done'] = 0
     
-    BATCH_SIZE = 500  # Define batch size for DB writes
+    BATCH_SIZE = 500
 
     try:
         osu_folder = os.getenv('OSU_FOLDER')
@@ -85,12 +85,11 @@ def sync_local_beatmaps_task():
         progress['message'] = 'Reading beatmap library (osu!.db)...'
         all_beatmap_data = parser.parse_osu_db(db_path)
         
-        # --- Initial write of all basic beatmap info ---
         progress['message'] = 'Saving basic beatmap metadata...'
         database.add_or_update_beatmaps(all_beatmap_data)
-        progress['batches_done'] += 1 # Signal to frontend that basic data is available
+        progress['batches_done'] += 1
 
-        progress['message'] = 'Checking for previously analyzed beatmaps...'
+        progress['message'] = 'Checking for un-analyzed beatmaps...'
         processed_md5s = database.get_processed_beatmap_hashes()
         
         items_to_process = [
@@ -98,29 +97,42 @@ def sync_local_beatmaps_task():
             if md5 not in processed_md5s and data.get('game_mode') == 0
         ]
         
-        if len(items_to_process) == 0:
+        if not items_to_process:
             progress['status'] = 'complete'
             progress['message'] = 'No new beatmaps to analyze. Your library is up to date.'
             return
             
-        progress['message'] = f"Found {len(items_to_process)} new beatmaps. Verifying files..."
+        # --- Stage 1: File Verification ---
+        progress['total'] = len(items_to_process)
+        progress['current'] = 0
+        progress['message'] = f"Verifying {progress['total']} beatmap files..."
+        
+        verified_items = []
+        for i, (md5, beatmap) in enumerate(items_to_process):
+            progress['current'] = i + 1
+            if beatmap.get('folder_name') and beatmap.get('osu_file_name'):
+                osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
+                if os.path.exists(osu_file_path):
+                    verified_items.append((md5, beatmap, osu_file_path))
 
+        # --- Stage 2: Analysis ---
+        progress['total'] = len(verified_items)
+        progress['current'] = 0
+        if progress['total'] == 0:
+            progress['status'] = 'complete'
+            progress['message'] = 'Beatmap library is up to date. No new files found to analyze.'
+            return
+            
+        progress['message'] = f"Analyzing {progress['total']} beatmaps..."
+        
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            tasks = []
-            for md5, beatmap in items_to_process:
-                if beatmap.get('folder_name') and beatmap.get('osu_file_name'):
-                    osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
-                    if os.path.exists(osu_file_path):
-                        tasks.append(executor.submit(process_osu_file_and_cache, osu_file_path, beatmap.get('bpm', 0), md5))
-
-            # Update total to the actual number of files we will process
-            progress['total'] = len(tasks)
-            progress['current'] = 0
-            progress['message'] = f"Analyzing {progress['total']} beatmaps..."
+            tasks = {
+                executor.submit(process_osu_file_and_cache, osu_path, bmap.get('bpm', 0), md5): md5
+                for md5, bmap, osu_path in verified_items
+            }
 
             processed_batch = {}
             mod_cache_batch = []
-
             for future in concurrent.futures.as_completed(tasks):
                 progress['current'] += 1
                 progress['message'] = f"Analyzing: {progress['current']}/{progress['total']}"
@@ -140,12 +152,10 @@ def sync_local_beatmaps_task():
                         progress['batches_done'] += 1
                         processed_batch = {}
                         mod_cache_batch = []
-
                 except Exception as e:
-                    logging.error(f"Error processing a beatmap future: {e}", exc_info=True)
+                    logging.error(f"Error processing beatmap future for md5 {tasks[future]}: {e}", exc_info=True)
 
         if processed_batch:
-            progress['message'] = 'Saving final batch...'
             database.add_or_update_beatmaps(processed_batch)
             progress['batches_done'] += 1
         if mod_cache_batch:
