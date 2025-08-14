@@ -124,3 +124,8 @@
     color: #ff8888;
     border-color: #5a3a3a;
 }
+
+.data-actions {
+    display: flex;
+    gap: 15px;
+}
