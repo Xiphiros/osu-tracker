@@ -206,12 +206,6 @@
     margin-right: auto;
 }
 
-.recommender-feedback-buttons {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-}
-
 .recommender-feedback button {
      border: none;
     padding: 10px 20px;
@@ -222,20 +216,12 @@
     transition: background-color 0.2s;
 }
 
-#passed-button, #next-map-button.passed {
+#next-map-button {
     background-color: #28a745;
     color: white;
 }
-#passed-button:hover, #next-map-button.passed:hover {
+#next-map-button:hover {
     background-color: #218838;
-}
-
-#failed-button, #next-map-button.failed {
-    background-color: #dc3545;
-    color: white;
-}
-#failed-button:hover, #next-map-button.failed:hover {
-    background-color: #c82333;
 }
 
 #skip-button {
@@ -244,20 +230,6 @@
 }
 #skip-button:hover {
     background-color: #5a6268;
-}
-
-#check-play-button {
-    background-color: #563d7c;
-    color: white;
-}
-#check-play-button:hover:not(:disabled) {
-    background-color: #463265;
-}
-
-.recommender-feedback .progress-container {
-    width: 100%;
-    max-width: 600px;
-    display: none;
 }
 
 #detection-result-container {
