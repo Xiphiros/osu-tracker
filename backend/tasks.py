@@ -70,7 +70,7 @@ def sync_local_beatmaps_task():
     progress['total'] = 0
     progress['message'] = 'Initializing...'
     
-    BATCH_SIZE = 500  # Define batch size for DB writes
+    BATCH_SIZE = 500  # Define batch size for DB writes and in-memory processing
 
     try:
         osu_folder = os.getenv('OSU_FOLDER')
@@ -82,57 +82,52 @@ def sync_local_beatmaps_task():
         songs_path = os.path.join(osu_folder, 'Songs')
         
         progress['message'] = 'Parsing osu!.db...'
-        beatmap_data = parser.parse_osu_db(db_path)
+        all_beatmap_data = parser.parse_osu_db(db_path)
+        all_beatmap_items = list(all_beatmap_data.items())
+        progress['total'] = len(all_beatmap_items)
         
-        tasks = []
-        for md5, beatmap in beatmap_data.items():
-             if beatmap.get('folder_name') and beatmap.get('osu_file_name') and beatmap.get('game_mode') == 0:
-                osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
-                if os.path.exists(osu_file_path):
-                    tasks.append((osu_file_path, beatmap.get('bpm', 0), md5))
-
-        progress['message'] = f"Calculating difficulty for {len(tasks)} beatmaps..."
-        progress['total'] = len(tasks)
-        progress['current'] = 0
-        all_mod_caches = []
-
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_md5 = {executor.submit(process_osu_file_and_cache, path, bpm, md5): md5 for path, bpm, md5 in tasks}
-            
-            for future in concurrent.futures.as_completed(future_to_md5):
-                progress['current'] += 1
-                md5 = future_to_md5[future]
-                beatmap_name = beatmap_data.get(md5, {}).get('osu_file_name', 'beatmap')
-                progress['message'] = f"Processing {beatmap_name}..."
+            # Process beatmaps in chunks to manage memory
+            for i in range(0, len(all_beatmap_items), BATCH_SIZE):
+                chunk_items = all_beatmap_items[i:i + BATCH_SIZE]
+                chunk_data = dict(chunk_items)
+                tasks = []
+
+                for md5, beatmap in chunk_data.items():
+                    if beatmap.get('folder_name') and beatmap.get('osu_file_name') and beatmap.get('game_mode') == 0:
+                        osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
+                        if os.path.exists(osu_file_path):
+                            tasks.append((osu_file_path, beatmap.get('bpm', 0), md5))
+
+                if not tasks:
+                    progress['current'] += len(chunk_items)
+                    continue
+
+                progress['message'] = f"Calculating difficulty for beatmaps {i+1}-{min(i+BATCH_SIZE, len(all_beatmap_items))}..."
                 
-                try:
-                    _md5, result_data, mod_caches = future.result()
-                    if result_data:
-                        beatmap_data[_md5].update(result_data)
-                    if mod_caches:
-                        all_mod_caches.extend(mod_caches)
-                except Exception as e:
-                    logging.error(f"Error processing future for {beatmap_name}: {e}", exc_info=True)
+                future_to_md5 = {executor.submit(process_osu_file_and_cache, path, bpm, md5): md5 for path, bpm, md5 in tasks}
+                
+                all_mod_caches = []
+                for future in concurrent.futures.as_completed(future_to_md5):
+                    progress['current'] += 1
+                    md5 = future_to_md5[future]
+                    
+                    try:
+                        _md5, result_data, mod_caches = future.result()
+                        if result_data:
+                            chunk_data[_md5].update(result_data)
+                        if mod_caches:
+                            all_mod_caches.extend(mod_caches)
+                    except Exception as e:
+                        beatmap_name = chunk_data.get(md5, {}).get('osu_file_name', 'beatmap')
+                        logging.error(f"Error processing future for {beatmap_name}: {e}", exc_info=True)
 
-        # --- Batch process the results ---
-        progress['message'] = 'Saving data to database in batches...'
+                # Save the processed chunk to the database
+                progress['message'] = f"Saving chunk to database..."
+                database.add_or_update_beatmaps(chunk_data)
+                if all_mod_caches:
+                    database.add_beatmap_mod_cache(all_mod_caches)
         
-        # Batch update beatmaps
-        beatmap_items = list(beatmap_data.items())
-        for i in range(0, len(beatmap_items), BATCH_SIZE):
-            batch_items = beatmap_items[i:i + BATCH_SIZE]
-            batch_dict = dict(batch_items)
-            progress['message'] = f"Saving beatmaps {i + 1}-{min(i + BATCH_SIZE, len(beatmap_items))}..."
-            database.add_or_update_beatmaps(batch_dict)
-
-        # Batch update mod cache
-        if all_mod_caches:
-            progress['message'] = f'Saving {len(all_mod_caches)} mod difficulty caches...'
-            for i in range(0, len(all_mod_caches), BATCH_SIZE):
-                batch_caches = all_mod_caches[i:i + BATCH_SIZE]
-                progress['message'] = f"Saving mod caches {i + 1}-{min(i + BATCH_SIZE, len(all_mod_caches))}..."
-                database.add_beatmap_mod_cache(batch_caches)
-
         progress['status'] = 'complete'
         progress['message'] = 'Beatmap database synchronization complete.'
     except Exception as e:
