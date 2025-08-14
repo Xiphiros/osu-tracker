@@ -11,6 +11,7 @@ from flask_cors import CORS
 from config import IS_BUNDLED, static_folder_path
 from api.routes import api_blueprint
 import database
+import watcher
 
 # --- Flask App Initialization ---
 app = Flask(__name__, static_folder=static_folder_path, static_url_path='')
@@ -56,6 +57,15 @@ if __name__ == '__main__':
         resizable=True,
         min_size=(960, 600)
     )
+
+    # Start the watchdog service to monitor for new replays
+    osu_folder = os.getenv("OSU_FOLDER")
+    if osu_folder:
+        watcher_thread = threading.Thread(target=watcher.start_watching, args=(osu_folder, window))
+        watcher_thread.daemon = True
+        watcher_thread.start()
+    else:
+        logging.warning("OSU_FOLDER not set. Automatic replay detection is disabled.")
 
     def on_closing():
         """Handle window closing event to gracefully shut down the app."""
