@@ -7,3 +7,4 @@ waitress==3.0.1
 pywebview
 watchdog
 setuptools==70.0.0
+zipp==3.19.1
