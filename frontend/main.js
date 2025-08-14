@@ -13,20 +13,23 @@ function updateGlobalStatus(progress) {
     const statusMessage = document.getElementById('status-message');
     const { sync, scan } = progress;
     let message = '';
-
-    const syncJustCompleted = lastProgress.sync?.status === 'running' && sync.status !== 'running';
-    const scanJustCompleted = lastProgress.scan?.status === 'running' && scan.status !== 'running';
-
+    
     if (sync.status === 'running') {
         message = sync.message;
     } else if (scan.status === 'running') {
         message = scan.message;
-    } else if (syncJustCompleted) {
-        message = sync.message;
-    } else if (scanJustCompleted) {
-        message = scan.message;
+    } else {
+        // Show the message of the most recently completed task
+        const syncJustCompleted = lastProgress.sync?.status === 'running' && sync.status !== 'running';
+        const scanJustCompleted = lastProgress.scan?.status === 'running' && scan.status !== 'running';
+
+        if (syncJustCompleted) {
+            message = sync.message;
+        } else if (scanJustCompleted) {
+            message = scan.message;
+        }
     }
-    
+
     if (statusMessage.textContent !== message) {
         statusMessage.textContent = message;
     }
@@ -46,11 +49,28 @@ async function pollProgress() {
         document.dispatchEvent(new CustomEvent('progressupdated', { detail: progress }));
         updateGlobalStatus(progress);
         
-        const wasSyncRunning = lastProgress.sync && lastProgress.sync.status === 'running';
-        const wasScanRunning = lastProgress.scan && lastProgress.scan.status === 'running';
+        const syncProgress = progress.sync;
+        const lastSyncProgress = lastProgress.sync || {};
+        const scanProgress = progress.scan;
+        const lastScanProgress = lastProgress.scan || {};
 
-        if ((wasSyncRunning && progress.sync.status !== 'running') || (wasScanRunning && progress.scan.status !== 'running')) {
-             document.dispatchEvent(new CustomEvent('datachanged', { bubbles: true }));
+        let shouldRefresh = false;
+
+        // Check for sync updates (batch or final)
+        if (
+            (syncProgress.status === 'running' && syncProgress.batches_done > (lastSyncProgress.batches_done || 0)) ||
+            (lastSyncProgress.status === 'running' && syncProgress.status !== 'running')
+        ) {
+            shouldRefresh = true;
+        }
+
+        // Check for scan updates (final only)
+        if (lastScanProgress.status === 'running' && scanProgress.status !== 'running') {
+            shouldRefresh = true;
+        }
+
+        if (shouldRefresh) {
+            document.dispatchEvent(new CustomEvent('datachanged', { bubbles: true }));
         }
 
         lastProgress = progress;
@@ -185,9 +205,17 @@ document.addEventListener('DOMContentLoaded', () => {
     mainContent.addEventListener('datachanged', async () => {
         console.log('Data changed event received, refreshing...');
         const config = await getConfig();
-        currentPlayer = config.default_player;
+        const playersBefore = Array.from(document.querySelectorAll('#player-selector option')).map(o => o.value);
         
         await populatePlayerSelector();
+        const playersAfter = Array.from(document.querySelectorAll('#player-selector option')).map(o => o.value);
+
+        // If the default player was not set and now we have players, set it.
+        if (!currentPlayer && playersAfter.length > 1) { // >1 to exclude "-- Select --"
+            const config = await getConfig();
+            currentPlayer = config.default_player || playersAfter[1]; // Use default or first real player
+            document.getElementById('player-selector').value = currentPlayer;
+        }
         
         const activeView = mainContent.querySelector('.view[style*="display: block"]');
         if (activeView) {
@@ -219,7 +247,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentPlayer) {
             switchView('profile');
         } else if (players.length > 0) {
-            switchView('scores');
+            // If no default is set, pick the first player and show their profile
+            currentPlayer = players[0];
+            document.getElementById('player-selector').value = currentPlayer;
+            switchView('profile');
         } else {
             switchView('config');
         }
