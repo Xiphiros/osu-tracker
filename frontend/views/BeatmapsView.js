@@ -1,4 +1,4 @@
-import { getBeatmaps } from '../services/api.js';
+import { getBeatmaps, getProgressStatus } from '../services/api.js';
 import { createBeatmapCard } from '../components/BeatmapCard.js';
 import { renderPagination } from '../components/Pagination.js';
 
@@ -33,8 +33,25 @@ export function createBeatmapsView() {
 export async function loadBeatmaps(viewElement, page = 1, searchTerm = currentSearchTerm) {
     const container = viewElement.querySelector('#beatmaps-container');
     const paginationContainer = viewElement.querySelector('#beatmaps-pagination');
+    const searchInput = viewElement.querySelector('#beatmaps-search');
     const statusMessage = document.getElementById('status-message');
-    
+
+    // Check progress status first
+    try {
+        const progress = await getProgressStatus();
+        if (progress.sync.status === 'running') {
+            container.innerHTML = `<p>Beatmap sync in progress. This view will refresh automatically when it's complete.</p>`;
+            paginationContainer.innerHTML = '';
+            searchInput.disabled = true;
+            statusMessage.textContent = `Syncing: ${progress.sync.current}/${progress.sync.total || '?'}`;
+            return; // Abort loading
+        }
+    } catch (e) {
+        // If progress check fails, still try to load maps but show a warning
+        statusMessage.textContent = 'Could not get task status. Attempting to load beatmaps...';
+    }
+
+    searchInput.disabled = false;
     currentSearchTerm = searchTerm;
     statusMessage.textContent = 'Loading beatmap data...';
     container.innerHTML = '';
@@ -63,5 +80,6 @@ export async function loadBeatmaps(viewElement, page = 1, searchTerm = currentSe
     } catch (error) {
         console.error('Error fetching beatmap data:', error);
         statusMessage.textContent = error.message;
+        container.innerHTML = `<p>Error: ${error.message}</p>`;
     }
 }
