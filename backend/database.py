@@ -300,21 +300,7 @@ def add_replays_batch(replays_data):
             speed_note_count, aim_difficult_strain_count, speed_difficult_strain_count, aim_difficult_slider_count,
             map_max_combo, bpm, bpm_min, bpm_max, played_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(replay_md5) DO UPDATE SET
-            pp = excluded.pp,
-            stars = excluded.stars,
-            aim = excluded.aim,
-            speed = excluded.speed,
-            slider_factor = excluded.slider_factor,
-            speed_note_count = excluded.speed_note_count,
-            aim_difficult_strain_count = excluded.aim_difficult_strain_count,
-            speed_difficult_strain_count = excluded.speed_difficult_strain_count,
-            aim_difficult_slider_count = excluded.aim_difficult_slider_count,
-            map_max_combo = excluded.map_max_combo,
-            bpm = excluded.bpm,
-            bpm_min = excluded.bpm_min,
-            bpm_max = excluded.bpm_max
-        WHERE replays.pp IS NULL AND excluded.pp IS NOT NULL
+        ON CONFLICT(replay_md5) DO NOTHING
     ''', replay_tuples)
     
     conn.commit()
@@ -419,6 +405,25 @@ def get_all_beatmaps(page=1, limit=50, search_term=None):
     beatmaps = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return {"beatmaps": beatmaps, "total": total}
+
+def get_processed_beatmap_hashes():
+    """Retrieves a set of MD5 hashes for beatmaps that have already been fully analyzed."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    # We consider a beatmap "processed" if it has a star rating calculated.
+    cursor.execute("SELECT md5_hash FROM beatmaps WHERE stars IS NOT NULL")
+    hashes = {row['md5_hash'] for row in cursor.fetchall()}
+    conn.close()
+    return hashes
+
+def get_all_replay_md5s():
+    """Retrieves a set of all replay MD5 hashes currently in the database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT replay_md5 FROM replays")
+    hashes = {row['replay_md5'] for row in cursor.fetchall()}
+    conn.close()
+    return hashes
 
 def add_or_update_beatmaps(beatmaps_data):
     """
