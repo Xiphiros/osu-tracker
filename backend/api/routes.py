@@ -2,14 +2,12 @@ import os
 import json
 import logging
 import threading
-import shutil
-import sqlite3
-from flask import Blueprint, jsonify, send_from_directory, request, send_file
+from flask import Blueprint, jsonify, send_from_directory, request
 from dotenv import set_key, load_dotenv
 
 import database
 from tasks import TASK_PROGRESS, scan_replays_task, sync_local_beatmaps_task
-from config import env_path, BASE_DIR
+from config import env_path
 
 # Create a Blueprint for API routes
 api_blueprint = Blueprint('api', __name__, url_prefix='/api')
@@ -193,70 +191,6 @@ def get_recommendation():
     if beatmap:
         return jsonify(beatmap)
     return jsonify({"message": "No new map found. Try adjusting the values."}), 404
-
-@api_blueprint.route('/data/export', methods=['GET'])
-def export_data():
-    """Exports the application database."""
-    try:
-        db_path = os.path.join(BASE_DIR, database.DATABASE_FILE)
-        if not os.path.exists(db_path):
-            return jsonify({"error": "Database file not found."}), 404
-        
-        return send_file(
-            db_path, 
-            as_attachment=True, 
-            download_name='osu_tracker_backup.db',
-            mimetype='application/x-sqlite3'
-        )
-    except Exception as e:
-        logging.error(f"Failed to export database: {e}", exc_info=True)
-        return jsonify({"error": "An error occurred during export."}), 500
-
-@api_blueprint.route('/data/import', methods=['POST'])
-def import_data():
-    """Imports an application database, replacing the current one."""
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part in the request."}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No file selected."}), 400
-        
-    if file and file.filename.endswith('.db'):
-        temp_path = os.path.join(BASE_DIR, "imported_db.tmp")
-        try:
-            file.save(temp_path)
-
-            # --- Validation Step ---
-            try:
-                conn = sqlite3.connect(temp_path)
-                # Check for a key table to validate it's the correct DB
-                cursor = conn.cursor()
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='replays';")
-                if cursor.fetchone() is None:
-                    raise sqlite3.DatabaseError("Database is missing 'replays' table.")
-                conn.close()
-            except sqlite3.Error as e:
-                os.remove(temp_path)
-                logging.warning(f"Invalid database file uploaded: {e}")
-                return jsonify({"error": f"Invalid database file: {e}"}), 400
-            
-            # --- Replacement Step ---
-            db_path = os.path.join(BASE_DIR, database.DATABASE_FILE)
-            
-            # The app must be restarted by the user, this will handle file locks.
-            shutil.move(temp_path, db_path)
-            
-            return jsonify({"message": "Database imported successfully. Please restart the application."})
-
-        except Exception as e:
-            logging.error(f"Failed to import database: {e}", exc_info=True)
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-            return jsonify({"error": "An error occurred during import."}), 500
-    else:
-        return jsonify({"error": "Invalid file type. Please upload a .db file."}), 400
-
 
 @api_blueprint.route('/songs/<path:file_path>')
 def serve_song_file(file_path):
