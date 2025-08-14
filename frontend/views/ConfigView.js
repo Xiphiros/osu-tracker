@@ -1,4 +1,4 @@
-import { syncBeatmaps, scanReplays, getProgressStatus, getConfig, saveConfig, getPlayers } from '../services/api.js';
+import { syncBeatmaps, scanReplays, getProgressStatus, getConfig, saveConfig, getPlayers, exportData, importData } from '../services/api.js';
 
 let viewElement = null;
 let isViewActive = false;
@@ -106,6 +106,16 @@ export function createConfigView() {
                 <span id="scan-progress-text" class="progress-text"></span>
             </div>
         </div>
+
+        <div class="config-action-card">
+            <h3>Data Management</h3>
+            <p>Export your score database for backup, or import a database from another installation. Importing will replace your current data and requires an application restart.</p>
+            <div class="data-actions">
+                <button id="export-data-button">Export Data</button>
+                <button id="import-data-button">Import Data</button>
+                <input type="file" id="import-file-input" accept=".db,application/x-sqlite3" style="display: none;">
+            </div>
+        </div>
     `;
 
     document.addEventListener('progressupdated', (e) => {
@@ -185,6 +195,49 @@ export function createConfigView() {
             setStatus(`Error starting scan: ${error.message}`, 'error');
         }
     });
+
+    const exportButton = view.querySelector('#export-data-button');
+    const importButton = view.querySelector('#import-data-button');
+    const importInput = view.querySelector('#import-file-input');
+
+    exportButton.addEventListener('click', async () => {
+        setStatus('Exporting data...', 'info');
+        try {
+            await exportData();
+            setStatus('Data backup created successfully.', 'success');
+        } catch (error) {
+            setStatus(`Export failed: ${error.message}`, 'error');
+        }
+    });
+
+    importButton.addEventListener('click', () => {
+        importInput.click();
+    });
+
+    importInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const allButtons = view.querySelectorAll('button');
+        const allInputs = view.querySelectorAll('input, select');
+        
+        allButtons.forEach(b => b.disabled = true);
+        allInputs.forEach(i => i.disabled = true);
+        setStatus('Importing data... Do not close the application.', 'info');
+
+        try {
+            const result = await importData(file);
+            setStatus(result.message, 'success');
+            // On success, leave controls disabled to encourage restart.
+        } catch (error) {
+            setStatus(`Import failed: ${error.message}`, 'error');
+            allButtons.forEach(b => b.disabled = false);
+            allInputs.forEach(i => i.disabled = false);
+        } finally {
+            importInput.value = ''; // Clear file input
+        }
+    });
+
 
     return view;
 }
