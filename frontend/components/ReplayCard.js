@@ -2,9 +2,16 @@ import { getSongFileUrl } from '../services/api.js';
 import { getModsFromInt } from '../utils/mods.js';
 import { playAudio } from '../utils/audioPlayer.js';
 
+// Helper function for secure element creation
+function createElement(tag, classNames = [], textContent = '') {
+    const el = document.createElement(tag);
+    if (classNames.length) el.classList.add(...classNames);
+    if (textContent) el.textContent = textContent;
+    return el;
+}
+
 export function createReplayCard(item) {
-    const card = document.createElement('div');
-    card.className = 'replay-card';
+    const card = createElement('div', ['replay-card']);
     const beatmap = item.beatmap || {};
 
     if (beatmap.folder_name && beatmap.background_file) {
@@ -15,108 +22,98 @@ export function createReplayCard(item) {
     const mods = getModsFromInt(item.mods_used);
     const isSilverRank = (item.rank === 'S' || item.rank === 'SS') && (mods.includes('HD') || mods.includes('FL'));
 
-    const wrapper = document.createElement('div');
-    wrapper.className = 'card-content-wrapper';
+    const wrapper = createElement('div', ['card-content-wrapper']);
 
-    const rankEmblem = document.createElement('div');
-    rankEmblem.className = 'card-left';
-    rankEmblem.innerHTML = `<div class="rank-emblem rank-${item.rank} ${isSilverRank ? 'rank-silver' : ''}">${item.rank || 'N/A'}</div>`;
+    const rankEmblemContainer = createElement('div', ['card-left']);
+    const rankEmblem = createElement('div', ['rank-emblem', `rank-${item.rank}`], item.rank || 'N/A');
+    if (isSilverRank) rankEmblem.classList.add('rank-silver');
+    rankEmblemContainer.appendChild(rankEmblem);
 
-    const right = document.createElement('div');
-    right.className = 'card-right';
+    const right = createElement('div', ['card-right']);
+    const rightTop = createElement('div'); // container for title, diff, stats
+
+    const title = createElement('div', ['card-title'], `${beatmap.artist || 'Unknown Artist'} - ${beatmap.title || 'Unknown Title'}`);
+    title.title = `${beatmap.artist} - ${beatmap.title}`;
+    const difficulty = createElement('div', ['card-difficulty'], `[${beatmap.difficulty || '?'}] mapped by ${beatmap.creator || 'Unknown Mapper'}`);
+    difficulty.title = `[${beatmap.difficulty}] mapped by ${beatmap.creator}`;
+    const player = createElement('div', ['card-player'], `Played by ${item.player_name || 'Unknown Player'}`);
+
+    // Stats (Stars, Aim/Speed, BPM)
+    const statsContainer = createElement('div', ['card-stats']);
+    const starsStat = createElement('span', ['stat-stars'], `★ ${item.stars ? item.stars.toFixed(2) : 'N/A'}`);
+    statsContainer.appendChild(starsStat);
+
+    const aimValue = item.aim ? item.aim.toFixed(2) : null;
+    const speedValue = item.speed ? item.speed.toFixed(2) : null;
+    if (aimValue && speedValue) {
+        const aimStat = createElement('span', ['stat-skill', 'stat-aim'], `🎯 ${aimValue}`);
+        aimStat.title = `Aim Difficulty: ${aimValue}`;
+        const speedStat = createElement('span', ['stat-skill', 'stat-speed'], `⚡ ${speedValue}`);
+        speedStat.title = `Speed Difficulty: ${speedValue}`;
+        statsContainer.append(aimStat, speedStat);
+    }
 
     const mainBpm = beatmap.bpm ? Math.round(beatmap.bpm) : null;
     const minBpm = beatmap.bpm_min ? Math.round(beatmap.bpm_min) : null;
     const maxBpm = beatmap.bpm_max ? Math.round(beatmap.bpm_max) : null;
+    let bpmText = mainBpm ? (minBpm && maxBpm && (maxBpm - minBpm) > 1 ? `${minBpm}-${maxBpm} (${mainBpm})` : `${mainBpm}`) : 'N/A';
+    const bpmStat = createElement('span', ['stat-bpm'], `♫ ${bpmText} BPM`);
+    statsContainer.appendChild(bpmStat);
+    rightTop.append(title, difficulty, player, statsContainer);
 
-    let bpmText;
-    if (mainBpm) {
-        if (minBpm && maxBpm && (maxBpm - minBpm) > 1) {
-            bpmText = `${minBpm}-${maxBpm} (${mainBpm})`;
-        } else {
-            bpmText = `${mainBpm}`;
-        }
-    } else {
-        bpmText = 'N/A';
-    }
-    
-    const aimValue = item.aim ? item.aim.toFixed(2) : null;
-    const speedValue = item.speed ? item.speed.toFixed(2) : null;
-    let skillHtml = '';
-    if (aimValue && speedValue) {
-        skillHtml += `<span class="stat-skill stat-aim" title="Aim Difficulty: ${aimValue}">🎯 ${aimValue}</span>`;
-        skillHtml += `<span class="stat-skill stat-speed" title="Speed Difficulty: ${speedValue}">⚡ ${speedValue}</span>`;
-    }
+    // Footer (Score, Judgements, Controls)
+    const footer = createElement('div', ['card-footer']);
+    const scoreContainer = createElement('div');
+    const scoreDisplay = createElement('div', ['card-score'], item.total_score.toLocaleString());
+    const judgements = createElement('div', ['card-judgements'], `300:${item.num_300s} 100:${item.num_100s} 50:${item.num_50s} X:${item.num_misses}`);
+    scoreContainer.append(scoreDisplay, judgements);
 
-
-    right.innerHTML = `
-        <div>
-            <div class="card-title" title="${beatmap.artist} - ${beatmap.title}">${beatmap.artist || 'Unknown Artist'} - ${beatmap.title || 'Unknown Title'}</div>
-            <div class="card-difficulty" title="[${beatmap.difficulty}] mapped by ${beatmap.creator}">[${beatmap.difficulty || '?'}] mapped by ${beatmap.creator || 'Unknown Mapper'}</div>
-            <div class="card-player">Played by ${item.player_name || 'Unknown Player'}</div>
-            <div class="card-stats">
-                <span class="stat-stars">★ ${item.stars ? item.stars.toFixed(2) : 'N/A'}</span>
-                ${skillHtml}
-                <span class="stat-bpm">♫ ${bpmText} BPM</span>
-            </div>
-        </div>
-        <div class="card-footer">
-            <div>
-                <div class="card-score">${item.total_score.toLocaleString()}</div>
-                <div class="card-judgements">300:${item.num_300s} 100:${item.num_100s} 50:${item.num_50s} X:${item.num_misses}</div>
-            </div>
-            <div class="footer-controls">
-                <button class="play-button">▶</button>
-                <div class="expand-indicator">▼</div>
-            </div>
-        </div>`;
-    wrapper.append(rankEmblem, right);
-    
-    const modsContainer = document.createElement('div');
-    modsContainer.className = 'card-mods';
+    const footerControls = createElement('div', ['footer-controls']);
+    const modsContainer = createElement('div', ['card-mods']);
     if (mods.length > 0) {
         mods.forEach(mod => {
-            const modBadge = document.createElement('span');
-            modBadge.className = 'mod-badge';
-            modBadge.textContent = mod;
-            modsContainer.appendChild(modBadge);
+            modsContainer.appendChild(createElement('span', ['mod-badge'], mod));
         });
     }
+    const playButton = createElement('button', ['play-button'], '▶');
+    const expandIndicator = createElement('div', ['expand-indicator'], '▼');
+    footerControls.append(modsContainer, playButton, expandIndicator);
+    footer.append(scoreContainer, footerControls);
+    right.append(rightTop, footer);
+    wrapper.append(rankEmblemContainer, right);
 
-    const footerControls = right.querySelector('.footer-controls');
-    footerControls.prepend(modsContainer);
+    // Extra Details (collapsible part)
+    const extraDetails = createElement('div', ['card-extra-details']);
+    const createDetailItem = (label, value) => {
+        const itemEl = createElement('div', ['detail-item']);
+        const labelSpan = createElement('span', ['detail-label'], label);
+        const valueSpan = createElement('span', [], value);
+        itemEl.append(labelSpan, valueSpan);
+        return itemEl;
+    };
 
     const totalHits = item.num_300s + item.num_100s + item.num_50s + item.num_misses;
     const accuracy = totalHits > 0 ? ((item.num_300s * 300 + item.num_100s * 100 + item.num_50s * 50) / (totalHits * 300) * 100).toFixed(2) : "0.00";
     const playedAt = item.played_at ? new Date(item.played_at).toLocaleDateString() : "Unknown";
 
-    const extraDetails = document.createElement('div');
-    extraDetails.className = 'card-extra-details';
-
-    const createDetailItem = (label, value) => {
-        const itemEl = document.createElement('div');
-        itemEl.className = 'detail-item';
-        itemEl.innerHTML = `<span class="detail-label">${label}</span><span>${value}</span>`;
-        return itemEl;
-    };
-
-    extraDetails.appendChild(createDetailItem('Accuracy', `${accuracy}%`));
-    extraDetails.appendChild(createDetailItem('Performance', item.pp ? `${item.pp.toFixed(2)}pp` : 'N/A'));
-    extraDetails.appendChild(createDetailItem('Star Rating', item.stars ? `★ ${item.stars.toFixed(2)}` : 'N/A'));
-    extraDetails.appendChild(createDetailItem('Max Combo', `${item.max_combo || 0}x / ${item.map_max_combo || '?'}x`));
-    extraDetails.appendChild(createDetailItem('Played On', playedAt));
+    extraDetails.append(
+        createDetailItem('Accuracy', `${accuracy}%`),
+        createDetailItem('Performance', item.pp ? `${item.pp.toFixed(2)}pp` : 'N/A'),
+        createDetailItem('Star Rating', item.stars ? `★ ${item.stars.toFixed(2)}` : 'N/A'),
+        createDetailItem('Max Combo', `${item.max_combo || 0}x / ${item.map_max_combo || '?'}x`),
+        createDetailItem('Played On', playedAt)
+    );
 
     card.append(wrapper, extraDetails);
 
-    const playButton = card.querySelector('.play-button');
+    // Event Listeners
     card.addEventListener('click', (e) => {
-        if(playButton.contains(e.target)) return;
+        if (playButton.contains(e.target)) return;
         card.classList.toggle('card-expanded');
     });
 
     if (beatmap.folder_name && beatmap.audio_file) {
         const audioUrl = getSongFileUrl(beatmap.folder_name, beatmap.audio_file);
-
         playButton.addEventListener('click', e => {
             e.stopPropagation();
             playAudio(
