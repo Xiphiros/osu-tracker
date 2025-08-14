@@ -2,7 +2,7 @@
 
 ## 1.1. Guiding Principles
 
-This project follows a modular and maintainable architecture. The backend is decoupled from the frontend, communicating via a clear API. This allows for independent development and testing.
+This project follows a modular and maintainable architecture. The backend is decoupled from the frontend, communicating via a clear REST API. This allows for independent development and testing.
 
 ## 1.2. Technology Stack
 
@@ -17,18 +17,33 @@ This project follows a modular and maintainable architecture. The backend is dec
 
 ```
 /
-├── memory-bank/
-│   └── 01_Architecture_And_Structure.md
-├── backend/
-│   ├── app.py              # Main Flask application and pywebview entry point
-│   ├── database.py         # Database connection and schema setup
-│   ├── parser.py           # File parsing logic for .osr and .db
-│   └── requirements.txt
-├── frontend/
-│   ├── ... (contents unchanged)
-├── .env                    # Environment variables (e.g., OSU_FOLDER)
+├── docs/                           # Project documentation
+│   ├── 01_Architecture_And_Structure.md
+│   ├── 02_Data_Formats.md
+│   ├── 03_rosu-pp-py_Reference.md
+│   └── 04_Training_Model_Recommender.md
+├── backend/                        # Flask server and core logic
+│   ├── api/                      # API blueprint and route definitions
+│   │   ├── __init__.py
+│   │   └── routes.py
+│   ├── app.py                    # Main application entry point (Flask + pywebview)
+│   ├── config.py                 # Configuration and environment setup
+│   ├── database.py               # Database schema, migrations, and queries
+│   ├── parser.py                 # Logic for parsing osu! file formats
+│   ├── tasks.py                  # Asynchronous background tasks (scan, sync)
+│   └── watcher.py                # Filesystem watcher for new replays
+├── frontend/                       # Vanilla JS frontend application
+│   ├── assets/                   # CSS and other static assets
+│   ├── components/               # Reusable UI components (JS + CSS)
+│   ├── services/                 # API call wrappers
+│   ├── utils/                    # Helper modules (e.g., audio player, mods)
+│   ├── views/                    # Main application views (JS + CSS)
+│   ├── index.html                # Main HTML file
+│   └── main.js                   # Main frontend entry point
+├── .env                            # Environment variables (OSU_FOLDER, etc.)
 ├── .gitignore
-└── build.py                # Script to build the executable
+├── build.py                        # PyInstaller build script
+└── requirements.txt
 ```
 
 ## 1.4. Build & Deployment

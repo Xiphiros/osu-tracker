@@ -6,31 +6,48 @@ The Training Recommender is designed to provide a structured, consistent, and in
 
 The core philosophy is to find the "edge" of a player's current ability (represented by a Star Rating) and consistently practice within that narrow band, moving it slightly up or down based on performance. This avoids the common pitfalls of jumping between wildly different difficulties, promoting more focused and efficient improvement.
 
-## 4.2. Core Logic
+## 4.2. Core Logic & Session Flow
 
-### 4.2.1. Inputs
+The recommender has evolved from a simple map finder into a comprehensive session planner. The new system guides the user through a structured training routine with automated feedback.
 
-The model requires four primary user inputs to begin a session:
-1.  **Target Star Rating (SR):** The difficulty level the player wants to start at. This can be entered manually or suggested by the application.
-2.  **Max BPM:** The maximum "main" BPM the player is comfortable playing at for the session.
-3.  **Mods:** The user can select a combination of mods (EZ, HD, HR, DT, HT, FL) to train.
-4.  **Skill Focus:** The user can specify a type of skill to target. See Section 4.4 for the list of focuses and their logic.
+### 4.2.1. Session Planning
 
-### 4.2.2. Search Criteria
+Before training, the user builds a session plan consisting of one or more sequential "steps". Each step defines:
+-   **Mods:** The mod combination to be used for this part of the session (e.g., HD, HR, DT).
+-   **Repetitions:** The number of maps that must be passed to complete the step.
+-   **Pass Criteria (Goals):** A set of conditions a play must meet to be considered a "pass." This can include:
+    -   Minimum Accuracy (e.g., ≥ 96%).
+    -   Maximum Miss Count (e.g., ≤ 5 misses).
+    -   Minimum Score (for ScoreV2 plays).
+
+### 4.2.2. Active Session
+
+Once the plan is created, the user starts the session. The application then guides them through each step.
+1.  **Map Request:** For the current step, the user requests a map. They can specify:
+    -   **Skill Focus:** A skill to target (e.g., Jumps, Flow, Speed).
+    -   **Target SR:** The difficulty level to aim for. The app can suggest a value based on recent plays.
+    -   **Max BPM:** The maximum comfortable BPM.
+2.  **Recommendation:** The system searches the database for a map matching the step's mods and the user's criteria, excluding maps played recently in the session.
+3.  **Play & Automatic Detection:** The user plays the recommended map in osu!. The application's file watcher detects when the new replay file is created.
+4.  **Goal Evaluation:** The system automatically validates the new score:
+    -   It confirms the replay is for the correct beatmap and mod combination.
+    -   It evaluates the play against the current step's pass criteria (accuracy, misses, etc.).
+5.  **Progress Update & SR Adjustment:**
+    -   **Pass:** If the goals are met, the map is considered "passed." The session's Target SR is slightly increased.
+    -   **Fail/Skip:** If goals are not met, or if the user manually skips the map, the Target SR is slightly decreased.
+    -   The application then prompts the user to find the next map. If the required number of passes for the step is met, it automatically moves to the next step in the plan.
+6.  **Session End:** The session concludes when all steps in the plan are completed.
+
+This automated loop provides a clear, structured path for improvement by dynamically adjusting difficulty based on real performance.
+
+## 4.3. Search Criteria
 
 When a recommendation is requested, the system searches the local beatmap database for a **single, random map** that meets the following criteria after calculating mod-adjusted difficulty with `rosu-pp-py`:
 -   **Game Mode:** Must be osu!standard (`game_mode = 0`).
 -   **Star Rating:** Must be within a narrow range: `modded_stars >= Target SR` and `modded_stars < Target SR + 0.15`.
 -   **BPM:** The map's mod-adjusted main BPM must be less than or equal to the specified Max BPM (`modded_bpm <= Max BPM`).
 -   **Skill Focus Filter:** An advanced heuristic is applied based on the user's selected focus. See Section 4.4.
-
-## 4.3. Session Flow
-
-The current implementation requires manual user feedback to guide the session.
-1.  **Initialization:** The user selects their desired mods and skill focus, and enters their starting SR and Max BPM.
-2.  **Request:** The user clicks "Find a map". The system finds and displays a suitable beatmap.
-3.  **Play:** The user plays the recommended map in the osu! client.
-4.  **Feedback:** The user returns to the tracker and reports whether they passed or failed their personal goal for that map, which adjusts the session SR accordingly.
+-   **Exclusion:** The map must not be in a temporary list of recently recommended maps for the current session to avoid repeats.
 
 ## 4.4. Skill Focus Categories & Heuristics
 
