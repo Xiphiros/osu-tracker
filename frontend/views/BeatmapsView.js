@@ -47,11 +47,14 @@ export async function loadBeatmaps(viewElement, page = 1, searchTerm = currentSe
     currentSearchTerm = searchTerm;
     statusMessage.textContent = 'Loading beatmap data...';
 
+    // Set a loading state, but don't clear content until we have a successful response
+    // This prevents a blank screen if the API call fails during a refresh.
+    container.style.opacity = '0.5';
+
     try {
         const response = await getBeatmaps(page, 50, searchTerm);
         
         // On success, clear the containers before rendering new content.
-        // This prevents a blank screen if the API call fails during a refresh.
         container.innerHTML = '';
         paginationContainer.innerHTML = '';
 
@@ -80,5 +83,7 @@ export async function loadBeatmaps(viewElement, page = 1, searchTerm = currentSe
         console.error('Error fetching beatmap data:', error);
         statusMessage.textContent = error.message;
         // Do not clear the container on error, so the user can still see the old data.
+    } finally {
+        container.style.opacity = '1';
     }
 }
