@@ -105,7 +105,7 @@ def sync_local_beatmaps_task():
         # --- Stage 1: File Verification ---
         progress['total'] = len(items_to_process)
         progress['current'] = 0
-        progress['message'] = f"Verifying {progress['total']} beatmap files..."
+        progress['message'] = f"Step 1/2: Verifying {progress['total']} beatmap files..."
         
         verified_items = []
         for i, (md5, beatmap) in enumerate(items_to_process):
@@ -123,7 +123,7 @@ def sync_local_beatmaps_task():
             progress['message'] = 'Beatmap library is up to date. No new files found to analyze.'
             return
             
-        progress['message'] = f"Analyzing {progress['total']} beatmaps..."
+        progress['message'] = f"Step 2/2: Analyzing {progress['total']} beatmaps..."
         
         with concurrent.futures.ThreadPoolExecutor() as executor:
             tasks = {
@@ -135,7 +135,7 @@ def sync_local_beatmaps_task():
             mod_cache_batch = []
             for future in concurrent.futures.as_completed(tasks):
                 progress['current'] += 1
-                progress['message'] = f"Analyzing: {progress['current']}/{progress['total']}"
+                progress['message'] = f"Step 2/2: Analyzing beatmaps ({progress['current']}/{progress['total']})"
                 try:
                     md5, result_data, mod_caches = future.result()
                     if result_data:
@@ -146,7 +146,7 @@ def sync_local_beatmaps_task():
                         mod_cache_batch.extend(mod_caches)
                     
                     if len(processed_batch) >= BATCH_SIZE:
-                        progress['message'] = f"Saving batch to database... ({progress['current']}/{progress['total']})"
+                        progress['message'] = f"Step 2/2: Saving progress... ({progress['current']}/{progress['total']})"
                         database.add_or_update_beatmaps(processed_batch)
                         database.add_beatmap_mod_cache(mod_cache_batch)
                         progress['batches_done'] += 1
@@ -205,7 +205,7 @@ def scan_replays_task():
 
         for i, file_name in enumerate(replay_files_to_process):
             progress['current'] = i + 1
-            progress['message'] = f"Processing new replays ({progress['current']}/{progress['total']})..."
+            progress['message'] = f"Processing replays: {progress['current']}/{progress['total']}"
             
             file_path = os.path.join(replays_path, file_name)
             try:
@@ -225,7 +225,7 @@ def scan_replays_task():
                 replay_batch.append(replay_data)
                 
                 if len(replay_batch) >= BATCH_SIZE:
-                    progress['message'] = 'Saving new replays to the database...'
+                    progress['message'] = f"Saving a batch of replays... ({progress['current']}/{progress['total']})"
                     database.add_replays_batch(replay_batch)
                     replay_batch = [] # Reset the batch
             except Exception as e:
