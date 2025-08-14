@@ -84,50 +84,54 @@ def sync_local_beatmaps_task():
         
         progress['message'] = 'Reading beatmap library (osu!.db)...'
         all_beatmap_data = parser.parse_osu_db(db_path)
-        all_beatmap_items = list(all_beatmap_data.items())
-        total_to_process = sum(1 for _, b in all_beatmap_items if b.get('game_mode') == 0)
-        progress['total'] = total_to_process
         
+        progress['message'] = 'Checking for previously analyzed beatmaps...'
+        processed_md5s = database.get_processed_beatmap_hashes()
+        
+        all_beatmap_items = list(all_beatmap_data.items())
+        
+        # Determine which beatmaps actually need the expensive processing
+        items_to_process = [
+            (md5, data) for md5, data in all_beatmap_items 
+            if md5 not in processed_md5s and data.get('game_mode') == 0
+        ]
+        progress['total'] = len(items_to_process)
+
+        if progress['total'] == 0:
+            progress['message'] = 'Updating existing beatmap metadata...'
+            database.add_or_update_beatmaps(all_beatmap_data)
+            progress['status'] = 'complete'
+            progress['message'] = 'No new beatmaps to analyze. Your library is up to date.'
+            return
+            
+        progress['message'] = f"Found {progress['total']} new beatmaps to analyze..."
+
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            # Process beatmaps in chunks to manage memory
-            for i in range(0, len(all_beatmap_items), BATCH_SIZE):
-                chunk_items = all_beatmap_items[i:i + BATCH_SIZE]
-                chunk_data = dict(chunk_items)
-                tasks = []
+            tasks = []
+            for md5, beatmap in items_to_process:
+                if beatmap.get('folder_name') and beatmap.get('osu_file_name'):
+                    osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
+                    if os.path.exists(osu_file_path):
+                        tasks.append(executor.submit(process_osu_file_and_cache, osu_file_path, beatmap.get('bpm', 0), md5))
 
-                for md5, beatmap in chunk_data.items():
-                    if beatmap.get('folder_name') and beatmap.get('osu_file_name') and beatmap.get('game_mode') == 0:
-                        osu_file_path = os.path.join(songs_path, beatmap['folder_name'], beatmap['osu_file_name'])
-                        if os.path.exists(osu_file_path):
-                            tasks.append((osu_file_path, beatmap.get('bpm', 0), md5))
+            for future in concurrent.futures.as_completed(tasks):
+                progress['current'] += 1
+                progress['message'] = f"Analyzing new beatmaps ({progress['current']}/{progress['total']})..."
+                try:
+                    md5, result_data, mod_caches = future.result()
+                    if result_data:
+                        all_beatmap_data[md5].update(result_data)
+                    if mod_caches:
+                        # This part is tricky as we're not batching this specific write.
+                        # For simplicity, we can collect and write at the end, or write per future.
+                        # Writing per future is less efficient but simpler to integrate.
+                        database.add_beatmap_mod_cache(mod_caches)
+                except Exception as e:
+                    logging.error(f"Error processing a beatmap future: {e}", exc_info=True)
 
-                if not tasks:
-                    continue
-
-                future_to_md5 = {executor.submit(process_osu_file_and_cache, path, bpm, md5): md5 for path, bpm, md5 in tasks}
-                
-                all_mod_caches = []
-                for future in concurrent.futures.as_completed(future_to_md5):
-                    progress['current'] += 1
-                    progress['message'] = f"Analyzing beatmaps ({progress['current']}/{progress['total']})..."
-                    md5 = future_to_md5[future]
-                    
-                    try:
-                        _md5, result_data, mod_caches = future.result()
-                        if result_data:
-                            chunk_data[_md5].update(result_data)
-                        if mod_caches:
-                            all_mod_caches.extend(mod_caches)
-                    except Exception as e:
-                        beatmap_name = chunk_data.get(md5, {}).get('osu_file_name', 'beatmap')
-                        logging.error(f"Error processing future for {beatmap_name}: {e}", exc_info=True)
-
-                # Save the processed chunk to the database
-                progress['message'] = f"Writing a batch of {len(chunk_data)} beatmaps to the database..."
-                database.add_or_update_beatmaps(chunk_data)
-                if all_mod_caches:
-                    database.add_beatmap_mod_cache(all_mod_caches)
-                progress['batches_done'] += 1
+        progress['message'] = 'Saving all beatmap data to the database...'
+        database.add_or_update_beatmaps(all_beatmap_data)
+        progress['batches_done'] += 1 # Signal a refresh
         
         progress['status'] = 'complete'
         progress['message'] = 'Sync complete! Your beatmap library is up to date.'
@@ -157,13 +161,23 @@ def scan_replays_task():
         all_beatmaps = {b['md5_hash']: b for b in database.get_all_beatmaps(limit=100000)['beatmaps']}
         if not all_beatmaps: logging.warning("Beatmap DB is empty. Replay data may be incomplete.")
 
-        replay_files = [f for f in os.listdir(replays_path) if f.endswith('.osr')]
-        progress['total'] = len(replay_files)
+        progress['message'] = 'Checking for existing replays in database...'
+        existing_replay_md5s = database.get_all_replay_md5s()
+        all_replay_files = [f for f in os.listdir(replays_path) if f.endswith('.osr')]
+        replay_files_to_process = [f for f in all_replay_files if f[:-4] not in existing_replay_md5s]
+        
+        progress['total'] = len(replay_files_to_process)
+        if progress['total'] == 0:
+            progress['status'] = 'complete'
+            progress['message'] = 'No new replays found. Your scores are up to date.'
+            return
+
+        progress['message'] = f"Found {progress['total']} new replays to process..."
         replay_batch = []
 
-        for i, file_name in enumerate(replay_files):
+        for i, file_name in enumerate(replay_files_to_process):
             progress['current'] = i + 1
-            progress['message'] = f"Scanning replays ({progress['current']}/{progress['total']})..."
+            progress['message'] = f"Processing new replays ({progress['current']}/{progress['total']})..."
             
             file_path = os.path.join(replays_path, file_name)
             try:
@@ -189,13 +203,12 @@ def scan_replays_task():
             except Exception as e:
                 logging.error(f"Could not process file {file_name}: {e}", exc_info=True)
         
-        # Write any remaining replays in the last batch
         if replay_batch:
             progress['message'] = 'Finalizing scan...'
             database.add_replays_batch(replay_batch)
         
         progress['status'] = 'complete'
-        progress['message'] = f"Scan complete! All {progress['total']} local replays have been processed."
+        progress['message'] = f"Scan complete! Added {progress['total']} new replays to your library."
     except Exception as e:
         logging.error(f"Error in scan task: {e}", exc_info=True)
         progress['status'] = 'error'
