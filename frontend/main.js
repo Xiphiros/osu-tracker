@@ -56,10 +56,10 @@ async function pollProgress() {
 
         let shouldRefresh = false;
 
-        // Check for sync updates (batch or final)
+        // Check for sync updates: either the task just finished, or a batch was completed.
         if (
-            (syncProgress.status === 'running' && syncProgress.batches_done > (lastSyncProgress.batches_done || 0)) ||
-            (lastSyncProgress.status === 'running' && syncProgress.status !== 'running')
+            (lastSyncProgress.status === 'running' && syncProgress.status !== 'running') ||
+            (syncProgress.status === 'running' && syncProgress.batches_done > (lastSyncProgress.batches_done || 0))
         ) {
             shouldRefresh = true;
         }
@@ -70,6 +70,7 @@ async function pollProgress() {
         }
 
         if (shouldRefresh) {
+            console.log('Detected data change from polling, dispatching event.');
             document.dispatchEvent(new CustomEvent('datachanged', { bubbles: true }));
         }
 
