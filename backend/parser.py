@@ -29,14 +29,6 @@ def read_double(file):
     """Reads an 8-byte double-precision float from the file."""
     return struct.unpack('<d', file.read(8))[0]
 
-def read_windows_ticks(file):
-    """Reads an 8-byte Windows Ticks value and converts it to an ISO string."""
-    ticks = read_long(file)
-    if ticks == 0:
-        return None
-    # Convert from 100-nanosecond intervals since 1/1/0001 to a datetime object
-    return (datetime(1, 1, 1) + timedelta(microseconds=ticks / 10)).isoformat()
-
 def read_uleb128(file):
     """Reads a ULEB128-encoded integer from the file."""
     result = 0
