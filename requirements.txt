@@ -3,7 +3,7 @@ Flask-Cors==6.0.0
 python-dotenv
 rosu-pp-py
 pyinstaller
-waitress
+waitress==3.0.1
 pywebview
 watchdog
 setuptools==70.0.0
