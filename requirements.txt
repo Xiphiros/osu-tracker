@@ -5,3 +5,4 @@ rosu-pp-py
 pyinstaller
 waitress
 pywebview[winforms]
+watchdog
