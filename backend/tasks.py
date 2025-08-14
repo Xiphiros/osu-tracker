@@ -68,7 +68,7 @@ def sync_local_beatmaps_task():
     progress['status'] = 'running'
     progress['current'] = 0
     progress['total'] = 0
-    progress['message'] = 'Initializing...'
+    progress['message'] = 'Starting beatmap sync...'
     
     BATCH_SIZE = 500  # Define batch size for DB writes and in-memory processing
 
@@ -81,7 +81,7 @@ def sync_local_beatmaps_task():
 
         songs_path = os.path.join(osu_folder, 'Songs')
         
-        progress['message'] = 'Parsing osu!.db...'
+        progress['message'] = 'Reading beatmap library (osu!.db)...'
         all_beatmap_data = parser.parse_osu_db(db_path)
         all_beatmap_items = list(all_beatmap_data.items())
         progress['total'] = len(all_beatmap_items)
@@ -103,13 +103,12 @@ def sync_local_beatmaps_task():
                     progress['current'] += len(chunk_items)
                     continue
 
-                progress['message'] = f"Calculating difficulty for beatmaps {i+1}-{min(i+BATCH_SIZE, len(all_beatmap_items))}..."
-                
                 future_to_md5 = {executor.submit(process_osu_file_and_cache, path, bpm, md5): md5 for path, bpm, md5 in tasks}
                 
                 all_mod_caches = []
                 for future in concurrent.futures.as_completed(future_to_md5):
                     progress['current'] += 1
+                    progress['message'] = f"Analyzing beatmaps ({progress['current']}/{progress['total']})..."
                     md5 = future_to_md5[future]
                     
                     try:
@@ -123,17 +122,16 @@ def sync_local_beatmaps_task():
                         logging.error(f"Error processing future for {beatmap_name}: {e}", exc_info=True)
 
                 # Save the processed chunk to the database
-                progress['message'] = f"Saving chunk to database..."
                 database.add_or_update_beatmaps(chunk_data)
                 if all_mod_caches:
                     database.add_beatmap_mod_cache(all_mod_caches)
         
         progress['status'] = 'complete'
-        progress['message'] = 'Beatmap database synchronization complete.'
+        progress['message'] = 'Sync complete! Your beatmap library is up to date.'
     except Exception as e:
         logging.error(f"Error in sync task: {e}", exc_info=True)
         progress['status'] = 'error'
-        progress['message'] = str(e)
+        progress['message'] = f'Sync failed: {e}'
 
 def scan_replays_task():
     """The background task for scanning the replays folder."""
@@ -141,7 +139,7 @@ def scan_replays_task():
     progress['status'] = 'running'
     progress['current'] = 0
     progress['total'] = 0
-    progress['message'] = 'Initializing...'
+    progress['message'] = 'Starting replay scan...'
 
     BATCH_SIZE = 200 # Define batch size for DB writes
 
@@ -162,7 +160,7 @@ def scan_replays_task():
 
         for i, file_name in enumerate(replay_files):
             progress['current'] = i + 1
-            progress['message'] = f'Scanning {file_name}...'
+            progress['message'] = f"Scanning replays ({progress['current']}/{progress['total']})..."
             
             file_path = os.path.join(replays_path, file_name)
             try:
@@ -182,7 +180,7 @@ def scan_replays_task():
                 replay_batch.append(replay_data)
                 
                 if len(replay_batch) >= BATCH_SIZE:
-                    progress['message'] = f"Writing a batch of {len(replay_batch)} replays to DB..."
+                    progress['message'] = 'Saving new replays to the database...'
                     database.add_replays_batch(replay_batch)
                     replay_batch = [] # Reset the batch
             except Exception as e:
@@ -190,12 +188,12 @@ def scan_replays_task():
         
         # Write any remaining replays in the last batch
         if replay_batch:
-            progress['message'] = f"Writing final batch of {len(replay_batch)} replays to DB..."
+            progress['message'] = 'Finalizing scan...'
             database.add_replays_batch(replay_batch)
         
         progress['status'] = 'complete'
-        progress['message'] = f"Scan complete. Processed {progress['total']} replays."
+        progress['message'] = f"Scan complete! Processed {progress['total']} new replays."
     except Exception as e:
         logging.error(f"Error in scan task: {e}", exc_info=True)
         progress['status'] = 'error'
-        progress['message'] = str(e)
+        progress['message'] = f'Scan failed: {e}'
