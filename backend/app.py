@@ -15,12 +15,12 @@ from api.routes import api_blueprint
 import database
 import watcher
 
+# --- Globals ---
+# This will hold the pywebview window instance, accessible by the Api class.
+window = None
+
 # --- pywebview API for native functionality ---
 class Api:
-    def __init__(self):
-        """Initializes the API class. The window object will be set later."""
-        self.window = None
-
     def export_database_dialog(self):
         """Opens a native 'Save As' dialog to export the database."""
         try:
@@ -28,7 +28,7 @@ class Api:
             if not os.path.exists(db_path):
                 return {"status": "error", "message": "Database file not found."}
 
-            result = self.window.create_file_dialog(
+            result = window.create_file_dialog(
                 webview.SAVE_DIALOG,
                 directory=os.path.expanduser('~'),
                 save_filename='osu_tracker_backup.db',
@@ -36,7 +36,8 @@ class Api:
             )
 
             if result:
-                save_path = result[0] if isinstance(result, tuple) else result
+                # create_file_dialog returns a tuple, even for single files
+                save_path = result[0]
                 shutil.copy(db_path, save_path)
                 logging.info(f"Database exported successfully to {save_path}")
                 return {"status": "success", "message": "Database exported successfully."}
@@ -50,7 +51,7 @@ class Api:
     def import_database_dialog(self):
         """Opens a native 'Open' dialog to import a database."""
         try:
-            result = self.window.create_file_dialog(
+            result = window.create_file_dialog(
                 webview.OPEN_DIALOG,
                 allow_multiple=False,
                 file_types=('Database Files (*.db)',)
@@ -59,7 +60,7 @@ class Api:
             if not result:
                 return {"status": "info", "message": "Import cancelled by user."}
 
-            import_path = result[0] if isinstance(result, tuple) else result
+            import_path = result[0]
             db_path = os.path.join(BASE_DIR, database.DATABASE_FILE)
             
             # Validation Step
@@ -117,7 +118,7 @@ if __name__ == '__main__':
     server_thread.daemon = True
     server_thread.start()
     logging.info("Backend server started in a background thread.")
-
+    
     # Create an instance of the API class that will be exposed to Javascript
     api = Api()
 
@@ -129,12 +130,9 @@ if __name__ == '__main__':
         height=800,
         resizable=True,
         min_size=(960, 600),
-        js_api=api # Expose the api instance to the window
+        js_api=api
     )
     
-    # Assign the window object to the API instance now that the window is created
-    api.window = window
-
     # Start the watchdog service to monitor for new replays
     osu_folder = os.getenv("OSU_FOLDER")
     if osu_folder:
