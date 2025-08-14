@@ -45,7 +45,6 @@ function stopGlobalProgressPolling() {
 async function pollProgress() {
     try {
         const progress = await getProgressStatus();
-        console.log("Poll received:", JSON.parse(JSON.stringify(progress))); // Detailed log
         
         document.dispatchEvent(new CustomEvent('progressupdated', { detail: progress }));
         updateGlobalStatus(progress);
@@ -71,7 +70,6 @@ async function pollProgress() {
         }
 
         if (shouldRefresh) {
-            console.log('Detected data change from polling, dispatching datachanged event.');
             document.dispatchEvent(new CustomEvent('datachanged', { bubbles: true }));
         }
 
@@ -205,7 +203,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     mainContent.addEventListener('datachanged', async () => {
-        console.log('Data changed event received, refreshing...');
+        // This log is still useful for general event tracking, but less noisy.
+        console.log('datachanged event received, refreshing active view...');
         const config = await getConfig();
         const playersBefore = Array.from(document.querySelectorAll('#player-selector option')).map(o => o.value);
         
