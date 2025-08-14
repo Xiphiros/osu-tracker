@@ -4,14 +4,83 @@ import logging
 import threading
 import webview
 import signal
+import shutil
+import sqlite3
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 
 # Import configurations and modular components
-from config import IS_BUNDLED, static_folder_path
+from config import IS_BUNDLED, static_folder_path, BASE_DIR
 from api.routes import api_blueprint
 import database
 import watcher
+
+# --- pywebview API for native functionality ---
+class Api:
+    def __init__(self, window):
+        self.window = window
+
+    def export_database_dialog(self):
+        """Opens a native 'Save As' dialog to export the database."""
+        try:
+            db_path = os.path.join(BASE_DIR, database.DATABASE_FILE)
+            if not os.path.exists(db_path):
+                return {"status": "error", "message": "Database file not found."}
+
+            result = self.window.create_file_dialog(
+                webview.SAVE_DIALOG,
+                directory=os.path.expanduser('~'),
+                save_filename='osu_tracker_backup.db',
+                file_types=('Database Files (*.db)',)
+            )
+
+            if result:
+                save_path = result[0]
+                shutil.copy(db_path, save_path)
+                logging.info(f"Database exported successfully to {save_path}")
+                return {"status": "success", "message": "Database exported successfully."}
+            else:
+                return {"status": "info", "message": "Export cancelled by user."}
+
+        except Exception as e:
+            logging.error(f"Failed to export database via dialog: {e}", exc_info=True)
+            return {"status": "error", "message": f"An error occurred: {e}"}
+
+    def import_database_dialog(self):
+        """Opens a native 'Open' dialog to import a database."""
+        try:
+            result = self.window.create_file_dialog(
+                webview.OPEN_DIALOG,
+                allow_multiple=False,
+                file_types=('Database Files (*.db)',)
+            )
+
+            if not result:
+                return {"status": "info", "message": "Import cancelled by user."}
+
+            import_path = result[0]
+            db_path = os.path.join(BASE_DIR, database.DATABASE_FILE)
+            
+            # Validation Step
+            try:
+                conn = sqlite3.connect(import_path)
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='replays';")
+                if cursor.fetchone() is None:
+                    raise sqlite3.DatabaseError("Database is missing 'replays' table.")
+                conn.close()
+            except sqlite3.Error as e:
+                logging.warning(f"Invalid database file selected for import: {e}")
+                return {"status": "error", "message": f"Invalid database file: {e}"}
+
+            # Replacement Step (app must be restarted to release file lock on Windows)
+            shutil.copy(import_path, db_path)
+            logging.info(f"Database imported from {import_path}. Restart is required.")
+            return {"status": "success", "message": "Database imported. Please restart the application."}
+
+        except Exception as e:
+            logging.error(f"Failed to import database via dialog: {e}", exc_info=True)
+            return {"status": "error", "message": f"An error occurred: {e}"}
 
 # --- Flask App Initialization ---
 app = Flask(__name__, static_folder=static_folder_path, static_url_path='')
@@ -55,8 +124,12 @@ if __name__ == '__main__':
         width=1280,
         height=800,
         resizable=True,
-        min_size=(960, 600)
+        min_size=(960, 600),
+        js_api=Api(None) # Initially None, will be set after creation
     )
+    
+    # Assign the window object to the API instance after creation
+    window.js_api.window = window
 
     # Start the watchdog service to monitor for new replays
     osu_folder = os.getenv("OSU_FOLDER")
