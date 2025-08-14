@@ -17,8 +17,9 @@ import watcher
 
 # --- pywebview API for native functionality ---
 class Api:
-    def __init__(self, window):
-        self.window = window
+    def __init__(self):
+        """Initializes the API class. The window object will be set later."""
+        self.window = None
 
     def export_database_dialog(self):
         """Opens a native 'Save As' dialog to export the database."""
@@ -35,7 +36,7 @@ class Api:
             )
 
             if result:
-                save_path = result[0]
+                save_path = result[0] if isinstance(result, tuple) else result
                 shutil.copy(db_path, save_path)
                 logging.info(f"Database exported successfully to {save_path}")
                 return {"status": "success", "message": "Database exported successfully."}
@@ -58,7 +59,7 @@ class Api:
             if not result:
                 return {"status": "info", "message": "Import cancelled by user."}
 
-            import_path = result[0]
+            import_path = result[0] if isinstance(result, tuple) else result
             db_path = os.path.join(BASE_DIR, database.DATABASE_FILE)
             
             # Validation Step
@@ -117,6 +118,9 @@ if __name__ == '__main__':
     server_thread.start()
     logging.info("Backend server started in a background thread.")
 
+    # Create an instance of the API class that will be exposed to Javascript
+    api = Api()
+
     # Create the pywebview window to display the frontend
     window = webview.create_window(
         'osu! Local Score Tracker',
@@ -125,11 +129,11 @@ if __name__ == '__main__':
         height=800,
         resizable=True,
         min_size=(960, 600),
-        js_api=Api(None) # Initially None, will be set after creation
+        js_api=api # Expose the api instance to the window
     )
     
-    # Assign the window object to the API instance after creation
-    window.js_api.window = window
+    # Assign the window object to the API instance now that the window is created
+    api.window = window
 
     # Start the watchdog service to monitor for new replays
     osu_folder = os.getenv("OSU_FOLDER")
