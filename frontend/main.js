@@ -201,29 +201,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     mainContent.addEventListener('datachanged', async () => {
-        console.log('datachanged event received, refreshing...');
-        
-        // Check if players existed *before* we refresh the list
-        const playersExistBefore = document.getElementById('player-selector') !== null;
+        console.log('Data changed event received, refreshing...');
         
         await populatePlayerSelector();
-
-        // Check if players exist *after* the refresh
-        const playersExistAfter = document.getElementById('player-selector') !== null;
-
-        // If we just went from no players to having players, auto-navigate
-        if (!playersExistBefore && playersExistAfter) {
-            const config = await getConfig();
-            const players = await getPlayers();
-            currentPlayer = config.default_player || players[0];
-            if (document.getElementById('player-selector')) {
-                document.getElementById('player-selector').value = currentPlayer;
-            }
-            switchView('profile');
-            return; // Stop here to prevent refreshing the old view
-        }
         
-        // If players already existed, just refresh the current view
+        // Refresh the current view to reflect any new data
         const activeView = mainContent.querySelector('.view[style*="display: block"]');
         if (activeView) {
             const viewName = activeView.dataset.viewName;
