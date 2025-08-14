@@ -10,7 +10,7 @@ import rosu_pp_py
 # Global dictionary to track progress of background tasks.
 # status can be 'idle', 'running', 'complete', 'error'
 TASK_PROGRESS = {
-    "sync": {"status": "idle", "current": 0, "total": 0, "message": ""},
+    "sync": {"status": "idle", "current": 0, "total": 0, "message": "", "batches_done": 0},
     "scan": {"status": "idle", "current": 0, "total": 0, "message": ""}
 }
 
@@ -69,6 +69,7 @@ def sync_local_beatmaps_task():
     progress['current'] = 0
     progress['total'] = 0
     progress['message'] = 'Starting beatmap sync...'
+    progress['batches_done'] = 0
     
     BATCH_SIZE = 500  # Define batch size for DB writes and in-memory processing
 
@@ -126,6 +127,7 @@ def sync_local_beatmaps_task():
                 database.add_or_update_beatmaps(chunk_data)
                 if all_mod_caches:
                     database.add_beatmap_mod_cache(all_mod_caches)
+                progress['batches_done'] += 1
         
         progress['status'] = 'complete'
         progress['message'] = 'Sync complete! Your beatmap library is up to date.'
