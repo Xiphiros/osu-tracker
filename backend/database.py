@@ -250,6 +250,76 @@ def add_replay(replay_data):
     conn.commit()
     conn.close()
 
+def add_replays_batch(replays_data):
+    """Adds a batch of new replays or updates them if calculated data was missing."""
+    if not replays_data:
+        return
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    replay_tuples = []
+    for replay_data in replays_data:
+        replay_tuples.append((
+            replay_data.get('game_mode'),
+            replay_data.get('game_version'),
+            replay_data.get('beatmap_md5'),
+            replay_data.get('player_name'),
+            replay_data.get('replay_md5'),
+            replay_data.get('num_300s'),
+            replay_data.get('num_100s'),
+            replay_data.get('num_50s'),
+            replay_data.get('num_gekis'),
+            replay_data.get('num_katus'),
+            replay_data.get('num_misses'),
+            replay_data.get('total_score'),
+            replay_data.get('max_combo'),
+            replay_data.get('mods_used'),
+            replay_data.get('pp'),
+            replay_data.get('stars'),
+            replay_data.get('aim'),
+            replay_data.get('speed'),
+            replay_data.get('slider_factor'),
+            replay_data.get('speed_note_count'),
+            replay_data.get('aim_difficult_strain_count'),
+            replay_data.get('speed_difficult_strain_count'),
+            replay_data.get('aim_difficult_slider_count'),
+            replay_data.get('map_max_combo'),
+            replay_data.get('bpm'),
+            replay_data.get('bpm_min'),
+            replay_data.get('bpm_max'),
+            replay_data.get('played_at'),
+        ))
+    
+    # 28 columns and 28 '?' placeholders
+    cursor.executemany('''
+        INSERT INTO replays (
+            game_mode, game_version, beatmap_md5, player_name, replay_md5,
+            num_300s, num_100s, num_50s, num_gekis, num_katus, num_misses,
+            total_score, max_combo, mods_used, pp, stars, aim, speed, slider_factor, 
+            speed_note_count, aim_difficult_strain_count, speed_difficult_strain_count, aim_difficult_slider_count,
+            map_max_combo, bpm, bpm_min, bpm_max, played_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(replay_md5) DO UPDATE SET
+            pp = excluded.pp,
+            stars = excluded.stars,
+            aim = excluded.aim,
+            speed = excluded.speed,
+            slider_factor = excluded.slider_factor,
+            speed_note_count = excluded.speed_note_count,
+            aim_difficult_strain_count = excluded.aim_difficult_strain_count,
+            speed_difficult_strain_count = excluded.speed_difficult_strain_count,
+            aim_difficult_slider_count = excluded.aim_difficult_slider_count,
+            map_max_combo = excluded.map_max_combo,
+            bpm = excluded.bpm,
+            bpm_min = excluded.bpm_min,
+            bpm_max = excluded.bpm_max
+        WHERE replays.pp IS NULL AND excluded.pp IS NOT NULL
+    ''', replay_tuples)
+    
+    conn.commit()
+    conn.close()
+
 def get_all_replays(player_name=None, page=1, limit=50, search_term=None):
     """
     Retrieves a paginated list of replay records, enriched with beatmap data.
