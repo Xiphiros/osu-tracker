@@ -13,22 +13,23 @@ function updateGlobalStatus(progress) {
     const statusMessage = document.getElementById('status-message');
     const { sync, scan } = progress;
     let message = '';
-    
+
+    const syncJustCompleted = lastProgress.sync?.status === 'running' && sync.status !== 'running';
+    const scanJustCompleted = lastProgress.scan?.status === 'running' && scan.status !== 'running';
+
     if (sync.status === 'running') {
-        message = `Syncing: ${sync.current}/${sync.total || '?'}...`;
+        message = sync.message;
     } else if (scan.status === 'running') {
-        message = `Scanning: ${scan.current}/${scan.total || '?'}...`;
-    } else {
-        // Show the message of the most recently completed task
-        const lastSyncCompleted = lastProgress.sync && lastProgress.sync.status !== 'running';
-        const lastScanCompleted = lastProgress.scan && lastProgress.scan.status !== 'running';
-        if (sync.status !== 'idle' && (!lastScanCompleted || lastSyncCompleted)) {
-            message = sync.status === 'complete' ? 'Sync complete.' : `Sync error: ${sync.message}`;
-        } else if (scan.status !== 'idle') {
-            message = scan.status === 'complete' ? 'Scan complete.' : `Scan error: ${scan.message}`;
-        }
+        message = scan.message;
+    } else if (syncJustCompleted) {
+        message = sync.message;
+    } else if (scanJustCompleted) {
+        message = scan.message;
     }
-    statusMessage.textContent = message;
+    
+    if (statusMessage.textContent !== message) {
+        statusMessage.textContent = message;
+    }
 }
 
 function stopGlobalProgressPolling() {
