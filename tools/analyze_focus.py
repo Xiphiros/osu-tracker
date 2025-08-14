@@ -4,6 +4,8 @@ import os
 # Go up one level from the 'tools' directory to find the DB
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE_FILE = os.path.join(BASE_DIR, '..', 'osu_tracker.db')
+OUTPUT_DIR = os.path.join(BASE_DIR, 'focus_lists')
+
 
 def get_db_connection():
     """Establishes a connection to the SQLite database."""
@@ -58,7 +60,7 @@ def get_focus_tag(beatmap):
     return "Balanced"
 
 def analyze_beatmaps():
-    """Fetches beatmaps from the DB and prints their focus tags."""
+    """Fetches beatmaps from the DB, prints their focus tags, and exports lists."""
     conn = get_db_connection()
     if not conn:
         return
@@ -83,34 +85,48 @@ def analyze_beatmaps():
         print("Please run the beatmap sync from the Config page in the application first.")
         return
 
-    focus_counts = {
-        "Balanced": 0,
-        "Jumps": 0,
-        "Flow": 0,
-        "Speed": 0,
-        "Stamina": 0,
-        "Incomplete Data": 0
-    }
+    focus_counts = { "Balanced": 0, "Jumps": 0, "Flow": 0, "Speed": 0, "Stamina": 0, "Incomplete Data": 0 }
+    grouped_maps = {tag: [] for tag in focus_counts}
     
-    tagged_maps = []
-    for beatmap in all_beatmaps:
-        tag = get_focus_tag(dict(beatmap))
+    for beatmap_row in all_beatmaps:
+        beatmap = dict(beatmap_row)
+        tag = get_focus_tag(beatmap)
         focus_counts[tag] += 1
-        tagged_maps.append((beatmap, tag))
+        grouped_maps[tag].append(beatmap)
         
-    # Sort by star rating for a more structured output
-    tagged_maps.sort(key=lambda x: x[0]['stars'], reverse=True)
+    # Export the lists to files
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    for tag, maps in grouped_maps.items():
+        if not maps: continue
+        
+        # Sort maps by star rating, descending
+        maps.sort(key=lambda m: m['stars'], reverse=True)
+        
+        filename = f"{tag.lower().replace(' ', '_')}.txt"
+        filepath = os.path.join(OUTPUT_DIR, filename)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            for bmap in maps:
+                f.write(f"[{bmap['stars']:.2f}*] {bmap['artist']} - {bmap['title']} [{bmap['difficulty']}]\n")
+
+    print(f"\nExported {len(all_beatmaps)} beatmaps into skill-focused lists in: {OUTPUT_DIR}")
+
+    # --- Console Output ---
+    # Combine all maps back for a general Top 100 list, sorted by stars
+    all_tagged_maps = [item for sublist in grouped_maps.values() for item in sublist]
+    all_tagged_maps.sort(key=lambda x: x['stars'], reverse=True)
 
     print("-" * 80)
-    print(f"Analyzed {len(all_beatmaps)} beatmaps. Results (Top 100 shown):")
+    print(f"Analysis complete. Overall Top 100 beatmaps by Star Rating:")
     print("-" * 80)
     
-    for beatmap, tag in tagged_maps[:100]:
+    for beatmap in all_tagged_maps[:100]:
+        tag = get_focus_tag(beatmap)
         print(f"[{tag:<10}] {beatmap['stars']:.2f}* | {beatmap['artist']} - {beatmap['title']} [{beatmap['difficulty']}]")
         
-    if len(tagged_maps) > 100:
+    if len(all_tagged_maps) > 100:
         print("\n...")
-        print(f"(and {len(tagged_maps) - 100} more)")
+        print(f"(and {len(all_tagged_maps) - 100} more)")
 
     print("\n" + "=" * 80)
     print("Focus Distribution Summary:")
