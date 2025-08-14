@@ -6,7 +6,7 @@ import webview
 import signal
 import shutil
 import sqlite3
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, abort
 from flask_cors import CORS
 
 # Import configurations and modular components
@@ -94,8 +94,23 @@ app.register_blueprint(api_blueprint)
 @app.route('/<path:path>')
 def serve_index(path):
     """Serves the frontend application."""
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+    if path == "":
+        return send_from_directory(app.static_folder, 'index.html')
+
+    # Prevent directory traversal.
+    # The normalized, absolute path of the requested file must be inside the static folder.
+    static_folder_abs = os.path.abspath(app.static_folder)
+    requested_path_abs = os.path.normpath(os.path.join(static_folder_abs, path))
+
+    if not requested_path_abs.startswith(static_folder_abs):
+        # Directory traversal attempt.
+        return abort(404)
+
+    # Check if the path points to an existing file.
+    if os.path.isfile(requested_path_abs):
         return send_from_directory(app.static_folder, path)
+    
+    # For any other path, serve the SPA's entry point.
     return send_from_directory(app.static_folder, 'index.html')
 
 # --- Server Execution ---
