@@ -22,7 +22,7 @@ function handleProgressUpdate(progress) {
         syncProgressContainer.style.display = 'block';
         syncProgressBar.value = syncData.current;
         syncProgressBar.max = syncData.total || 100;
-        syncProgressText.textContent = `${syncData.message} (${syncData.current} / ${syncData.total || '?'})`;
+        syncProgressText.textContent = syncData.message;
     } else {
         syncProgressContainer.style.display = 'none';
     }
@@ -32,7 +32,7 @@ function handleProgressUpdate(progress) {
         scanProgressContainer.style.display = 'block';
         scanProgressBar.value = scanData.current;
         scanProgressBar.max = scanData.total || 100;
-        scanProgressText.textContent = `${scanData.message} (${scanData.current} / ${scanData.total || '?'})`;
+        scanProgressText.textContent = scanData.message;
     } else {
         scanProgressContainer.style.display = 'none';
     }
