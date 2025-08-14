@@ -1,17 +1,17 @@
 import {
-	getRecommendation,
-	getLatestReplay,
-	getSuggestedSr
+    getRecommendation,
+    getLatestReplay,
+    getSuggestedSr
 } from '../services/api.js';
 import {
-	createBeatmapCard
+    createBeatmapCard
 } from '../components/BeatmapCard.js';
 import {
-	createReplayCard
+    createReplayCard
 } from '../components/ReplayCard.js';
 import {
-	getIntFromMods,
-	MODS
+    getIntFromMods,
+    MODS
 } from '../utils/mods.js';
 
 // --- STATE MANAGEMENT ---
@@ -27,25 +27,20 @@ let currentRecommendation = null;
 const MAX_REROLLS = 3;
 
 function calculateAccuracy(replay) {
-	const totalHits = replay.num_300s + replay.num_100s + replay.num_50s + replay.num_misses;
-	if (totalHits === 0) return 0;
-	return ((replay.num_300s * 300 + replay.num_100s * 100 + replay.num_50s * 50) / (totalHits * 300)) * 100;
+    const totalHits = replay.num_300s + replay.num_100s + replay.num_50s + replay.num_misses;
+    if (totalHits === 0) return 0;
+    return ((replay.num_300s * 300 + replay.num_100s * 100 + replay.num_50s * 50) / (totalHits * 300)) * 100;
 }
 
 export function createRecommenderView() {
-	const view = document.createElement('div');
-	view.id = 'recommender-view';
-	view.className = 'view';
+    const view = document.createElement('div');
+    view.id = 'recommender-view';
+    view.className = 'view';
 
-	const savedSr = localStorage.getItem('recommender_sr') || '5.5';
-	const savedBpm = localStorage.getItem('recommender_bpm') || '200';
-	const savedAcc = localStorage.getItem('goal_accuracy') || '96';
-	const savedMisses = localStorage.getItem('goal_misses') || '';
-
-	view.innerHTML = `
+    // Set static HTML content first, without interpolating potentially unsafe values.
+    view.innerHTML = `
         <h2>Training Recommender</h2>
 
-        <!-- PLANNER VIEW (default) -->
         <div id="recommender-planner">
             <div class="session-planner-controls">
                 <h3>Add a Step to Your Plan</h3>
@@ -57,11 +52,11 @@ export function createRecommenderView() {
                     </div>
                     <div class="control-group">
                         <label for="planner-goal-accuracy">Min Accuracy (%)</label>
-                        <input type="number" id="planner-goal-accuracy" min="0" max="100" step="0.1" placeholder="e.g., 96" value="${savedAcc}">
+                        <input type="number" id="planner-goal-accuracy" min="0" max="100" step="0.1" placeholder="e.g., 96">
                     </div>
                     <div class="control-group">
                         <label for="planner-goal-misses">Max Misses</label>
-                        <input type="number" id="planner-goal-misses" min="0" step="1" placeholder="e.g., 5" value="${savedMisses}">
+                        <input type="number" id="planner-goal-misses" min="0" step="1" placeholder="e.g., 5">
                     </div>
                     <div class="control-group" id="planner-goal-score-group" style="display: none;">
                         <label for="planner-goal-score">Min Score (SV2)</label>
@@ -85,11 +80,10 @@ export function createRecommenderView() {
             </div>
         </div>
 
-        <!-- ACTIVE SESSION VIEW (hidden) -->
         <div id="recommender-active-session" style="display: none;">
             <div id="session-progress-display"></div>
             <div class="recommender-controls">
-                 <div class="skill-focus-container">
+                <div class="skill-focus-container">
                     <label>Skill Focus:</label>
                     <div class="radio-group">
                         <input type="radio" id="focus-balanced" name="skill-focus" value="balanced" checked>
@@ -108,20 +102,19 @@ export function createRecommenderView() {
                     <div class="control-group">
                         <label for="target-sr">Target Star Rating</label>
                         <div class="input-with-button">
-                            <input type="number" id="target-sr" value="${savedSr}" step="0.1" min="1">
+                            <input type="number" id="target-sr" step="0.1" min="1">
                             <button id="suggest-sr-button" class="small-button" title="Suggest SR based on your goals and play history">Suggest</button>
                         </div>
                     </div>
                     <div class="control-group">
                         <label for="max-bpm">Target Max BPM</label>
-                        <input type="number" id="max-bpm" value="${savedBpm}" step="5" min="60">
+                        <input type="number" id="max-bpm" step="5" min="60">
                     </div>
                     <button id="find-map-button">Find a map</button>
                 </div>
             </div>
         </div>
 
-        <!-- SHARED ELEMENTS -->
         <div id="recommender-result"><p>Plan your session, then click "Start Session".</p></div>
         <div id="recommender-feedback" class="recommender-feedback">
             <div id="manual-feedback-container">
@@ -135,38 +128,49 @@ export function createRecommenderView() {
         </div>
     `;
 
-	const trainingMods = ['EZ', 'HD', 'HR', 'DT', 'HT', 'FL'];
+    // Safely get values from localStorage and set them on the input elements.
+    const savedSr = localStorage.getItem('recommender_sr') || '5.5';
+    const savedBpm = localStorage.getItem('recommender_bpm') || '200';
+    const savedAcc = localStorage.getItem('goal_accuracy') || '96';
+    const savedMisses = localStorage.getItem('goal_misses') || '';
+    
+    view.querySelector('#target-sr').value = savedSr;
+    view.querySelector('#max-bpm').value = savedBpm;
+    view.querySelector('#planner-goal-accuracy').value = savedAcc;
+    view.querySelector('#planner-goal-misses').value = savedMisses;
 
-	// --- Element Query Selectors ---
-	const findButton = view.querySelector('#find-map-button');
-	const srInput = view.querySelector('#target-sr');
-	const suggestSrButton = view.querySelector('#suggest-sr-button');
-	const bpmInput = view.querySelector('#max-bpm');
-	const resultContainer = view.querySelector('#recommender-result');
-	const feedbackContainer = view.querySelector('#recommender-feedback');
+    const trainingMods = ['EZ', 'HD', 'HR', 'DT', 'HT', 'FL'];
+
+    // --- Element Query Selectors ---
+    const findButton = view.querySelector('#find-map-button');
+    const srInput = view.querySelector('#target-sr');
+    const suggestSrButton = view.querySelector('#suggest-sr-button');
+    const bpmInput = view.querySelector('#max-bpm');
+    const resultContainer = view.querySelector('#recommender-result');
+    const feedbackContainer = view.querySelector('#recommender-feedback');
     const manualFeedbackContainer = view.querySelector('#manual-feedback-container');
-	const skipButton = view.querySelector('#skip-button');
-	const statusMessage = document.getElementById('status-message');
-	const detectionResultContainer = view.querySelector('#detection-result-container');
-	const detectionResultMessage = view.querySelector('#detection-result-message');
-	const detectedReplayCardContainer = view.querySelector('#detected-replay-card-container');
-	const nextMapButton = view.querySelector('#next-map-button');
+    const skipButton = view.querySelector('#skip-button');
+    const statusMessage = document.getElementById('status-message');
+    const detectionResultContainer = view.querySelector('#detection-result-container');
+    const detectionResultMessage = view.querySelector('#detection-result-message');
+    const detectedReplayCardContainer = view.querySelector('#detected-replay-card-container');
+    const nextMapButton = view.querySelector('#next-map-button');
 
-	// Planner UI
-	const plannerView = view.querySelector('#recommender-planner');
-	const plannerModContainer = view.querySelector('.planner-form-grid .mod-selection-container');
-	const addStepButton = view.querySelector('#add-step-button');
-	const sessionQueueList = view.querySelector('#session-queue-list');
-	const startSessionButton = view.querySelector('#start-session-button');
-	const sv2Toggle = view.querySelector('#sv2-goal-toggle');
-	const plannerScoreGroup = view.querySelector('#planner-goal-score-group');
+    // Planner UI
+    const plannerView = view.querySelector('#recommender-planner');
+    const plannerModContainer = view.querySelector('.planner-form-grid .mod-selection-container');
+    const addStepButton = view.querySelector('#add-step-button');
+    const sessionQueueList = view.querySelector('#session-queue-list');
+    const startSessionButton = view.querySelector('#start-session-button');
+    const sv2Toggle = view.querySelector('#sv2-goal-toggle');
+    const plannerScoreGroup = view.querySelector('#planner-goal-score-group');
 
-	// Active Session UI
-	const activeSessionView = view.querySelector('#recommender-active-session');
-	const sessionProgressDisplay = view.querySelector('#session-progress-display');
+    // Active Session UI
+    const activeSessionView = view.querySelector('#recommender-active-session');
+    const sessionProgressDisplay = view.querySelector('#session-progress-display');
 
 
-	// --- Functions ---
+    // --- Functions ---
     const renderQueue = () => {
         sessionQueueList.innerHTML = '';
         if (sessionQueue.length === 0) {
@@ -288,81 +292,81 @@ export function createRecommenderView() {
         statusMessage.textContent = "Session ended.";
     }
 
-	const resetMapFinder = () => {
-		rerollCount = 0;
-		excludedBeatmapIds = [];
-		lastSearchParams = null;
-		currentRecommendation = null;
-		findButton.textContent = 'Find a map';
-		findButton.disabled = false;
+    const resetMapFinder = () => {
+        rerollCount = 0;
+        excludedBeatmapIds = [];
+        lastSearchParams = null;
+        currentRecommendation = null;
+        findButton.textContent = 'Find a map';
+        findButton.disabled = false;
         feedbackContainer.style.display = 'none';
         manualFeedbackContainer.style.display = 'none';
         detectionResultContainer.style.display = 'none';
-	};
+    };
 
-	trainingMods.forEach(mod => {
-		const button = document.createElement('button');
-		button.className = 'mod-button';
-		button.textContent = mod;
-		button.dataset.mod = mod;
-		button.addEventListener('click', () => {
-			const deactivate = m => {
-				if (plannerActiveMods.has(m)) {
-					plannerActiveMods.delete(m);
-					plannerModContainer.querySelector(`[data-mod="${m}"]`).classList.remove('active');
-				}
-			};
-			if (!plannerActiveMods.has(mod)) {
-				if (mod === 'DT') { deactivate('HT'); }
-				if (mod === 'HT') deactivate('DT');
-				if (mod === 'HR') deactivate('EZ');
-				if (mod === 'EZ') deactivate('HR');
-				plannerActiveMods.add(mod);
-				button.classList.add('active');
-			} else {
-				plannerActiveMods.delete(mod);
-				button.classList.remove('active');
-			}
-		});
-		plannerModContainer.appendChild(button);
-	});
+    trainingMods.forEach(mod => {
+        const button = document.createElement('button');
+        button.className = 'mod-button';
+        button.textContent = mod;
+        button.dataset.mod = mod;
+        button.addEventListener('click', () => {
+            const deactivate = m => {
+                if (plannerActiveMods.has(m)) {
+                    plannerActiveMods.delete(m);
+                    plannerModContainer.querySelector(`[data-mod="${m}"]`).classList.remove('active');
+                }
+            };
+            if (!plannerActiveMods.has(mod)) {
+                if (mod === 'DT') { deactivate('HT'); }
+                if (mod === 'HT') deactivate('DT');
+                if (mod === 'HR') deactivate('EZ');
+                if (mod === 'EZ') deactivate('HR');
+                plannerActiveMods.add(mod);
+                button.classList.add('active');
+            } else {
+                plannerActiveMods.delete(mod);
+                button.classList.remove('active');
+            }
+        });
+        plannerModContainer.appendChild(button);
+    });
 
-	suggestSrButton.addEventListener('click', async () => {
+    suggestSrButton.addEventListener('click', async () => {
         if (!isSessionActive) return;
-		const playerName = document.getElementById('player-selector')?.value;
-		if (!playerName) {
-			statusMessage.textContent = 'Please select a player first.';
-			return;
-		}
+        const playerName = document.getElementById('player-selector')?.value;
+        if (!playerName) {
+            statusMessage.textContent = 'Please select a player first.';
+            return;
+        }
 
         const currentStep = sessionQueue[currentStepIndex];
-		const mods = getIntFromMods(currentStep.mods);
+        const mods = getIntFromMods(currentStep.mods);
         const focus = view.querySelector('input[name="skill-focus"]:checked').value;
-		const params = {
-			mods,
+        const params = {
+            mods,
             focus
-		};
+        };
 
-		suggestSrButton.disabled = true;
-		suggestSrButton.textContent = '...';
-		statusMessage.textContent = `Analyzing ${focus}-focused plays...`;
+        suggestSrButton.disabled = true;
+        suggestSrButton.textContent = '...';
+        statusMessage.textContent = `Analyzing ${focus}-focused plays...`;
 
-		try {
-			const result = await getSuggestedSr(playerName, params);
-			const suggestedSr = result.suggested_sr;
-			srInput.value = suggestedSr.toFixed(1);
-			localStorage.setItem('recommender_sr', srInput.value);
-			statusMessage.textContent = `Suggestion based on your last ${result.plays_considered} ${focus}-focused plays: ${suggestedSr.toFixed(2)} ★`;
-		} catch (error) {
-			statusMessage.textContent = `Error: ${error.message}`;
-		} finally {
-			suggestSrButton.disabled = false;
-			suggestSrButton.textContent = 'Suggest';
-		}
-	});
+        try {
+            const result = await getSuggestedSr(playerName, params);
+            const suggestedSr = result.suggested_sr;
+            srInput.value = suggestedSr.toFixed(1);
+            localStorage.setItem('recommender_sr', srInput.value);
+            statusMessage.textContent = `Suggestion based on your last ${result.plays_considered} ${focus}-focused plays: ${suggestedSr.toFixed(2)} ★`;
+        } catch (error) {
+            statusMessage.textContent = `Error: ${error.message}`;
+        } finally {
+            suggestSrButton.disabled = false;
+            suggestSrButton.textContent = 'Suggest';
+        }
+    });
 
-	srInput.addEventListener('change', () => localStorage.setItem('recommender_sr', srInput.value));
-	bpmInput.addEventListener('change', () => localStorage.setItem('recommender_bpm', bpmInput.value));
+    srInput.addEventListener('change', () => localStorage.setItem('recommender_sr', srInput.value));
+    bpmInput.addEventListener('change', () => localStorage.setItem('recommender_bpm', bpmInput.value));
     
     sv2Toggle.addEventListener('change', () => {
         plannerScoreGroup.style.display = sv2Toggle.checked ? 'flex' : 'none';
@@ -371,66 +375,66 @@ export function createRecommenderView() {
         }
     });
 
-	findButton.addEventListener('click', async () => {
+    findButton.addEventListener('click', async () => {
         if (!isSessionActive) return;
         const currentStep = sessionQueue[currentStepIndex];
 
-		const sr = parseFloat(srInput.value);
-		const bpm = parseInt(bpmInput.value, 10);
-		const mods = getIntFromMods(currentStep.mods);
+        const sr = parseFloat(srInput.value);
+        const bpm = parseInt(bpmInput.value, 10);
+        const mods = getIntFromMods(currentStep.mods);
         const focus = view.querySelector('input[name="skill-focus"]:checked').value;
 
-		const currentSearchParams = JSON.stringify({ sr, bpm, mods, focus });
+        const currentSearchParams = JSON.stringify({ sr, bpm, mods, focus });
 
-		if (lastSearchParams === currentSearchParams) rerollCount++;
-		else {
+        if (lastSearchParams === currentSearchParams) rerollCount++;
+        else {
             rerollCount = 0;
             excludedBeatmapIds = [];
         };
-		lastSearchParams = currentSearchParams;
+        lastSearchParams = currentSearchParams;
 
-		if (rerollCount >= MAX_REROLLS) {
-			statusMessage.textContent = `Max rerolls reached. Try different settings.`;
-			findButton.disabled = true;
-			return;
-		}
-		if (isNaN(sr) || isNaN(bpm)) {
-			statusMessage.textContent = "Please enter valid SR and BPM values.";
-			return;
-		}
-		findButton.disabled = true;
-		statusMessage.textContent = `Searching for a ${focus}-focused map...`;
-		resultContainer.innerHTML = '<p>Searching...</p>';
-		feedbackContainer.style.display = 'none';
-		try {
-			const beatmap = await getRecommendation(sr, bpm, mods, excludedBeatmapIds, focus);
-			if (beatmap) {
-				excludedBeatmapIds.push(beatmap.md5_hash);
-				currentRecommendation = {
-					md5_hash: beatmap.md5_hash,
-					mods: mods,
+        if (rerollCount >= MAX_REROLLS) {
+            statusMessage.textContent = `Max rerolls reached. Try different settings.`;
+            findButton.disabled = true;
+            return;
+        }
+        if (isNaN(sr) || isNaN(bpm)) {
+            statusMessage.textContent = "Please enter valid SR and BPM values.";
+            return;
+        }
+        findButton.disabled = true;
+        statusMessage.textContent = `Searching for a ${focus}-focused map...`;
+        resultContainer.innerHTML = '<p>Searching...</p>';
+        feedbackContainer.style.display = 'none';
+        try {
+            const beatmap = await getRecommendation(sr, bpm, mods, excludedBeatmapIds, focus);
+            if (beatmap) {
+                excludedBeatmapIds.push(beatmap.md5_hash);
+                currentRecommendation = {
+                    md5_hash: beatmap.md5_hash,
+                    mods: mods,
                     goals: { ...currentStep.goals } // Snapshot goals for this play
-				};
-				resultContainer.innerHTML = '';
-				resultContainer.appendChild(createBeatmapCard(beatmap));
-				feedbackContainer.style.display = 'flex';
+                };
+                resultContainer.innerHTML = '';
+                resultContainer.appendChild(createBeatmapCard(beatmap));
+                feedbackContainer.style.display = 'flex';
                 manualFeedbackContainer.style.display = 'block';
-				detectionResultContainer.style.display = 'none';
-				statusMessage.textContent = 'Map found! Play it and your score will be detected automatically.';
-				findButton.textContent = `Reroll (${MAX_REROLLS - rerollCount - 1} left)`;
-			} else {
-				resultContainer.innerHTML = `<p>No new map found. Try adjusting the values.</p>`;
-				statusMessage.textContent = 'No new map found.';
-				findButton.textContent = 'Find a map';
-				lastSearchParams = null;
-			}
-		} catch (error) {
-			resultContainer.innerHTML = `<p class="error">${error.message}</p>`;
-			statusMessage.textContent = 'Error finding map.';
-		} finally {
-			findButton.disabled = (rerollCount + 1 >= MAX_REROLLS);
-		}
-	});
+                detectionResultContainer.style.display = 'none';
+                statusMessage.textContent = 'Map found! Play it and your score will be detected automatically.';
+                findButton.textContent = `Reroll (${MAX_REROLLS - rerollCount - 1} left)`;
+            } else {
+                resultContainer.innerHTML = `<p>No new map found. Try adjusting the values.</p>`;
+                statusMessage.textContent = 'No new map found.';
+                findButton.textContent = 'Find a map';
+                lastSearchParams = null;
+            }
+        } catch (error) {
+            resultContainer.innerHTML = `<p class="error">${error.message}</p>`;
+            statusMessage.textContent = 'Error finding map.';
+        } finally {
+            findButton.disabled = (rerollCount + 1 >= MAX_REROLLS);
+        }
+    });
 
     const handleSessionProgress = (passed, reason = "") => {
         const srChange = passed ? 0.1 : -0.1;
@@ -460,7 +464,7 @@ export function createRecommenderView() {
         }
     };
 
-	skipButton.addEventListener('click', () => handleSessionProgress(false, "Map skipped."));
+    skipButton.addEventListener('click', () => handleSessionProgress(false, "Map skipped."));
 
     const checkForNewPlay = async () => {
         const playerName = document.getElementById('player-selector')?.value;
@@ -525,5 +529,5 @@ export function createRecommenderView() {
 
     // Initial render
     renderQueue();
-	return view;
+    return view;
 }
