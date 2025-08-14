@@ -70,6 +70,8 @@ def sync_local_beatmaps_task():
     progress['total'] = 0
     progress['message'] = 'Initializing...'
     
+    BATCH_SIZE = 500  # Define batch size for DB writes
+
     try:
         osu_folder = os.getenv('OSU_FOLDER')
         if not osu_folder: raise ValueError("OSU_FOLDER environment variable is not set.")
@@ -112,12 +114,24 @@ def sync_local_beatmaps_task():
                 except Exception as e:
                     logging.error(f"Error processing future for {beatmap_name}: {e}", exc_info=True)
 
-        progress['message'] = 'Saving beatmaps to database...'
-        database.add_or_update_beatmaps(beatmap_data)
+        # --- Batch process the results ---
+        progress['message'] = 'Saving data to database in batches...'
         
+        # Batch update beatmaps
+        beatmap_items = list(beatmap_data.items())
+        for i in range(0, len(beatmap_items), BATCH_SIZE):
+            batch_items = beatmap_items[i:i + BATCH_SIZE]
+            batch_dict = dict(batch_items)
+            progress['message'] = f"Saving beatmaps {i + 1}-{min(i + BATCH_SIZE, len(beatmap_items))}..."
+            database.add_or_update_beatmaps(batch_dict)
+
+        # Batch update mod cache
         if all_mod_caches:
             progress['message'] = f'Saving {len(all_mod_caches)} mod difficulty caches...'
-            database.add_beatmap_mod_cache(all_mod_caches)
+            for i in range(0, len(all_mod_caches), BATCH_SIZE):
+                batch_caches = all_mod_caches[i:i + BATCH_SIZE]
+                progress['message'] = f"Saving mod caches {i + 1}-{min(i + BATCH_SIZE, len(all_mod_caches))}..."
+                database.add_beatmap_mod_cache(batch_caches)
 
         progress['status'] = 'complete'
         progress['message'] = 'Beatmap database synchronization complete.'
@@ -134,6 +148,8 @@ def scan_replays_task():
     progress['total'] = 0
     progress['message'] = 'Initializing...'
 
+    BATCH_SIZE = 200 # Define batch size for DB writes
+
     try:
         osu_folder = os.getenv('OSU_FOLDER')
         if not osu_folder: raise ValueError("OSU_FOLDER path not set in .env file")
@@ -147,6 +163,7 @@ def scan_replays_task():
 
         replay_files = [f for f in os.listdir(replays_path) if f.endswith('.osr')]
         progress['total'] = len(replay_files)
+        replay_batch = []
 
         for i, file_name in enumerate(replay_files):
             progress['current'] = i + 1
@@ -167,9 +184,19 @@ def scan_replays_task():
                         replay_data.update(osu_details)
                         database.update_beatmap_details(replay_data['beatmap_md5'], osu_details)
                 
-                database.add_replay(replay_data)
+                replay_batch.append(replay_data)
+                
+                if len(replay_batch) >= BATCH_SIZE:
+                    progress['message'] = f"Writing a batch of {len(replay_batch)} replays to DB..."
+                    database.add_replays_batch(replay_batch)
+                    replay_batch = [] # Reset the batch
             except Exception as e:
                 logging.error(f"Could not process file {file_name}: {e}", exc_info=True)
+        
+        # Write any remaining replays in the last batch
+        if replay_batch:
+            progress['message'] = f"Writing final batch of {len(replay_batch)} replays to DB..."
+            database.add_replays_batch(replay_batch)
         
         progress['status'] = 'complete'
         progress['message'] = f"Scan complete. Processed {progress['total']} replays."
