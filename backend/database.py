@@ -474,6 +474,91 @@ def update_beatmap_details(md5_hash, details):
     
     conn.commit()
     conn.close()
+
+def get_all_replays(player_name=None, page=1, limit=50, search_term=None):
+    """
+    Retrieves a paginated list of replay records, enriched with beatmap data.
+    Can be filtered by player name and a text search term.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    base_query = " FROM replays r LEFT JOIN beatmaps b ON r.beatmap_md5 = b.md5_hash "
+    where_clauses = []
+    params = []
+
+    if player_name:
+        where_clauses.append("r.player_name = ?")
+        params.append(player_name)
+
+    if search_term:
+        search_like = f"%{search_term}%"
+        where_clauses.append("(b.title LIKE ? OR b.artist LIKE ? OR b.creator LIKE ?)")
+        params.extend([search_like, search_like, search_like])
+
+    where_sql = ""
+    if where_clauses:
+        where_sql = " WHERE " + " AND ".join(where_clauses)
+    
+    count_query = "SELECT COUNT(r.id) " + base_query + where_sql
+    cursor.execute(count_query, params)
+    total = cursor.fetchone()[0]
+
+    select_query = """
+        SELECT
+            r.*, b.artist, b.title, b.creator, b.difficulty, b.folder_name,
+            b.osu_file_name, b.grades, b.last_played_date, b.num_hitcircles,
+            b.num_sliders, b.num_spinners, b.ar, b.cs, b.hp, b.od,
+            b.audio_file, b.background_file,
+            COALESCE(r.bpm, b.bpm) as bpm,
+            COALESCE(r.bpm_min, b.bpm_min) as bpm_min,
+            COALESCE(r.bpm_max, b.bpm_max) as bpm_max
+    """ + base_query + where_sql + " ORDER BY r.played_at DESC LIMIT ? OFFSET ?"
+    
+    offset = (page - 1) * limit
+    params.extend([limit, offset])
+    
+    cursor.execute(select_query, params)
+
+    replays = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
+    # Enrich with beatmap object
+    for replay in replays:
+        replay['beatmap'] = {
+            'artist': replay.get('artist'), 'title': replay.get('title'), 'creator': replay.get('creator'),
+            'difficulty': replay.get('difficulty'), 'folder_name': replay.get('folder_name'),
+            'osu_file_name': replay.get('osu_file_name'), 'grades': replay.get('grades'),
+            'last_played_date': replay.get('last_played_date'), 'num_hitcircles': replay.get('num_hitcircles'),
+            'num_sliders': replay.get('num_sliders'), 'num_spinners': replay.get('num_spinners'),
+            'ar': replay.get('ar'), 'cs': replay.get('cs'), 'hp': replay.get('hp'), 'od': replay.get('od'),
+            'bpm': replay.get('bpm'), 'audio_file': replay.get('audio_file'), 
+            'background_file': replay.get('background_file'),
+            'bpm_min': replay.get('bpm_min'), 'bpm_max': replay.get('bpm_max')
+        }
+
+    return {"replays": replays, "total": total}
+
+def get_beatmap_by_md5(md5_hash):
+    """Retrieves a single beatmap by its MD5 hash."""
+    if not md5_hash: return None
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM beatmaps WHERE md5_hash = ?", (md5_hash,))
+    beatmap_row = cursor.fetchone()
+    conn.close()
+    if beatmap_row:
+        return dict(beatmap_row)
+    return None
+
+def get_unique_players():
+    """Retrieves a list of unique player names from the replays table."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT player_name FROM replays ORDER BY player_name")
+    players = [row['player_name'] for row in cursor.fetchall()]
+    conn.close()
+    return players
     
 def get_recommendation(target_sr, max_bpm, mods, excluded_ids=[], focus=None):
     """
